@@ -1,0 +1,118 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+```{r}
+library(tidyverse)
+```
+
+```{r}
+library(CodeClanData)
+```
+Question 1 - Load the dataset and look at it. What are the dimensions, 
+variable types, variable names?
+```{r}
+drinks_content
+```
+#Dimensions of dataset - 242 rows and 18 columns
+```{r}
+dim(drinks_content)
+```
+#Variable types and names - a mix of numeric and categorical variables 
+containing types of beverages at Starbucks and their nutritional information.
+```{r}
+glimpse(drinks_content)
+```
+#Question 2 - Select variables and check for NA values - no NA values in calories
+```{r}
+coffee_calories <- select(drinks_content, Beverage_category, Beverage, 
+                          Beverage_prep, Calories)
+```
+```{r}
+coffee_calories
+```
+```{r}
+sum(is.na(coffee_calories$Calories))
+```
+#Question 3 - create new variable calorie_diff which takes away 135 calories from each drink
+
+```{r}
+coffee_calories %>% 
+mutate(calorie_diff = Calories - 135)
+```
+
+#Question 4 - Summarise the mean number of calories in each beverage category
+Smoothies, Frappucino Blended Coffee and Signature Espresso have 
+the most calories on average
+Coffee, Shaken Iced Beverages and Classic Espresso drinks have the least
+calories on average
+
+#Create a group_by variable called Beverage_category_grouped
+```{r}
+Beverage_category_grouped <- group_by(coffee_calories, Beverage_category)
+```
+
+#Summarise the mean number of calories for Beverage_category_grouped and arrange
+in ascending order.
+```{r}
+summarise(Beverage_category_grouped, Avg_calories = mean(Calories)) %>% 
+  arrange(Avg_calories)
+```
+
+
+
+#Question 5 - What is the average number of calories in each Beverage_prep type?
+
+#Group dataset by Beverage_prep type, summarise the average number of calories
+for each group, arrange by number of calories.
+```{r}
+coffee_calories %>% 
+  group_by(Beverage_prep) %>% 
+  summarise(Average_Calories = mean(Calories)) %>% 
+  arrange(Average_Calories)
+```
+
+#Question 6 - Which Beverage_prep type contains more than the average calories 
+of all drinks?
+5 beverage prep types contain more than the average calories of all drinks
+1) Whole Milk
+2) Venti Nonfat Milk
+3) 2% Milk
+4) Grande Nonfat Milk
+5) Soymilk
+
+#First, find the avg calories of all drinks and then convert into numeric value
+using pull
+
+```{r}
+average_calories_all_drinks <- coffee_calories %>% 
+  summarise(average_value = mean(Calories)) %>% 
+  pull()
+average_calories_all_drinks
+```
+#Then create a summary table grouped by beverage prep with an extra column 
+that finds the difference between average calories for the beverage_prep type
+and the average calories in all the drinks. Filter out any values that are
+negative so that we only see which beverage_prep types contain more than
+the average calories for all drinks.
+
+```{r}
+coffee_calories %>% 
+  group_by(Beverage_prep) %>% 
+  summarise(Average_Calories = mean(Calories)) %>% 
+  mutate(avg_calorie_diff = Average_Calories - average_calories_all_drinks) %>% 
+  filter(avg_calorie_diff > 0)
+```
+
+#Question 7 - Which is the best type of coffee drink to get if you're worried
+about consuming too many calories?
+A short brewed coffee b/c it only has 3 calories
+
+Filter data to only include drinks with the Beverage_category "Coffee" and 
+arrange by Calories in ascending order
+```{r}
+coffee_calories %>% 
+  filter(Beverage_category == "Coffee") %>% 
+  arrange(Calories)
+```
+
