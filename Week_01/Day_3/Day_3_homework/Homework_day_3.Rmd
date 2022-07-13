@@ -1,0 +1,108 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+```
+```{r}
+library(readxl)
+```
+###Data
+```{r}
+movie_data <- read_csv("movies.csv")
+movie_data
+```
+##Question 1
+The first thing I noticed is that the data is formatted correctly, so we
+don't need to skip some rows. It looks like there are two variables for title
+so I will need to choose between the two. The other variables are named 
+sensibly, so I don't need to change their names. There is some info that will 
+probably not be very useful for summary stats such as the summary of the movie 
+and the movie's tagline. We haven't learned any text analysis yet, so I 
+probably can't do anything with these. We should check for NAs and also for 
+unexpected values (e.g. where runtime is 0 or where the budget is 0).
+
+```{r}
+summary(movie_data)
+```
+##Question 2 - Select variables of interest
+
+```{r}
+movies_selected <- movie_data %>% 
+  select(title, runtime, budget)
+```
+
+##Question 3 - Find missing values
+
+```{r}
+summary(is.na(movies_selected))
+```
+
+##Question 4 - Convert "0" runtime into NAs in new variable "movies_runtime" 
+and then count NAs again
+
+```{r}
+movies_selected <- movies_selected %>% 
+  mutate(movies_runtime = na_if(runtime, "0"),
+         .after = runtime)
+  summary(is.na(movies_selected))
+```
+
+
+##Question 5 - Impute missing values in runtime with median runtime and check
+for missing values
+
+```{r}
+movies_imputed <- movies_selected %>% 
+  mutate(runtime = coalesce(movies_runtime, 
+                            median(movies_runtime, na.rm = TRUE)))
+movies_imputed
+```
+```{r}
+summary(is.na(movies_imputed))
+```
+
+##Question 6 - Find movies with 10 shortest and 10 longest runtimes using 
+_slice_min_ and _slice_max_
+
+```{r}
+movies_imputed %>% 
+  slice_min(runtime, n = 10)
+
+movies_imputed %>% 
+  slice_max(runtime, n= 10)
+```
+
+##Question 7 - Use the _if_else_ function to replace budgets below $100 with
+the median budget
+
+```{r}
+movies_imputed <- movies_imputed %>% 
+  mutate(budget = if_else(budget < 100, median(budget, na.rm = TRUE), budget))
+movies_imputed
+```
+```{r}
+summary(movies_imputed)
+```
+
+##Extention 1 - Use _case_when_ to create a new budget type column
+
+```{r}
+movies_imputed <- movies_imputed %>% 
+  mutate(
+    movie_budgets = case_when(
+      budget < 12000000 ~ "Small Budget",
+      between(budget, 12000000, 40000000) ~ "Medium Budget",
+      budget > 40000000 ~ "Big Budget"
+    )
+  )
+```
+
+
+```{r}
+movies_imputed %>% 
+  count(movie_budgets)
+```
+
