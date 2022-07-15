@@ -2,22 +2,20 @@
 title: "R Notebook"
 output: html_notebook
 ---
-
+##Libraries
 ```{r}
 library(tidyverse)
 ```
-```{r}
-library(readxl)
-```
-###Data
+
+##Read in data
 ```{r}
 movie_data <- read_csv("movies.csv")
 movie_data
 ```
 ##Question 1
-The first thing I noticed is that the data is formatted correctly, so we
-don't need to skip some rows. It looks like there are two variables for title
-so I will need to choose between the two. The other variables are named 
+The first thing I noticed is that the data is formatted correctly (no metadata),
+so we don't need to skip some rows. It looks like there are two variables for 
+title so I will need to choose between the two. The other variables are named 
 sensibly, so I don't need to change their names. There is some info that will 
 probably not be very useful for summary stats such as the summary of the movie 
 and the movie's tagline. We haven't learned any text analysis yet, so I 
@@ -57,7 +55,8 @@ for missing values
 ```{r}
 movies_imputed <- movies_selected %>% 
   mutate(runtime = coalesce(movies_runtime, 
-                            median(movies_runtime, na.rm = TRUE)))
+                            median(
+                              movies_runtime, na.rm = TRUE)))
 movies_imputed
 ```
 ```{r}
@@ -80,9 +79,14 @@ the median budget
 
 ```{r}
 movies_imputed <- movies_imputed %>% 
-  mutate(budget = if_else(budget < 100, median(budget, na.rm = TRUE), budget))
+  mutate(budget = if_else(
+    budget < 100, 
+    median(budget, na.rm = TRUE), 
+    budget))
 movies_imputed
 ```
+
+##Check that there are no budgets below 100 in new dataset
 ```{r}
 summary(movies_imputed)
 ```
@@ -93,14 +97,14 @@ summary(movies_imputed)
 movies_imputed <- movies_imputed %>% 
   mutate(
     movie_budgets = case_when(
-      budget < 12000000 ~ "Small Budget",
+      budget < 12000000                   ~ "Small Budget",
       between(budget, 12000000, 40000000) ~ "Medium Budget",
-      budget > 40000000 ~ "Big Budget"
+      budget > 40000000                   ~ "Big Budget"
     )
   )
 ```
 
-
+##Check count for each group in category movie_budgets
 ```{r}
 movies_imputed %>% 
   count(movie_budgets)
