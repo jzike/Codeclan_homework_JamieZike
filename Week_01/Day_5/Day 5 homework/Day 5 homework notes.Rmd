@@ -1,0 +1,237 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+#Libraries
+```{r}
+library(tidyverse)
+```
+
+#Data
+```{r}
+books <- read_csv("books.csv")
+```
+
+#Data exploration
+Find out what kind of information is in the dataset and what questions are 
+appropriate to ask.
+
+
+```{r}
+#Explore the dataset
+str(books)
+dim(books)
+names(books)
+#Find out if there are any NAs in the dataset
+sum(is.na(books))
+#Find out whether there are outliers in the numeric variables
+summary(books)
+
+```
+The _num_pages_, _ratings_count_ and _text_reviews_count_ variables have 
+outliers where the values are very high, meaning I should not use the mean
+value when working with these variables as it has clearly been effected by 
+high outliers.
+
+Language is not likely to be of much use since Goodreads is more likely to be
+used by readers in English-speaking countries, so I can't make any conclusions
+about language anyway as it will be biased toward English books.
+
+##Actions
+-Explore zero values in the _num_pages_, _ratings_count_ and _average_ratings_
+variables
+-Calculate outliers - outliers for _average_ratings_ could tell us which books
+are extremely highly rated and extremely lowly rated. 
+-Remove books with zero ratings since we're interested in ratings
+
+
+#Exploring missing values
+There aren't any missing values, but there are some variables with a value
+of zero
+
+```{r}
+#Explore books with zero pages and those with less than 10 pages b/c we would 
+#expect even children's books to have more than 10 pages
+books %>% 
+  select(title, num_pages, average_rating, ratings_count) %>% 
+  filter(num_pages == 0)
+
+books %>% 
+  select(title, num_pages, average_rating, ratings_count) %>% 
+  filter(num_pages < 10)
+```
+
+Some books with zero pages are audiobooks, some are collections of books and
+some are unclear why they would be listed as having zero pages. There
+doesn't seem to be a connection between books with under 10 pages and the 
+number of ratings and average rating.
+
+```{r}
+#Explore books with 0 ratings and then a low number of ratings
+books %>% 
+  select(title, num_pages, average_rating, ratings_count) %>% 
+  filter(ratings_count == 0)
+```
+
+Some books with zero ratings have an average rating above zero, which doesn't
+make any sense. This enforces the case that all books with 0 ratings should
+be removed from the dataset.
+
+```{r}
+#Explore books with a zero average rating and a rating of 5
+books %>% 
+  select(title, num_pages, average_rating, ratings_count) %>% 
+  filter(average_rating == 0)
+
+books %>% 
+  select(title, num_pages, average_rating, ratings_count) %>% 
+  filter(average_rating == 5)
+```
+All books with a zero average rating also don't have any ratings, so they can
+be removed without risking removing books that everyone just hated.
+
+All books with a rating of 5 have a very low number of ratings (n <= 5), so 
+they should also be removed because ratings with a very low number of raters
+can't be trusted. We should consider the pros and cons of removing all books
+with fewer than 5 raters.
+
+I looked up the formula for finding outliers in average rating to find very low
+rated books and very high rated books. This number is also useful to find very
+low rated books with very few raters and very high rated books with very few 
+raters. I can then exclude these from the dataset.
+The formula for finding low outliers is Quartile 1 - 1.5(Inter-quartile range)
+The formula for finding high outliers is Quartile 3 + 1.5 (Interquartile range)
+Low outliers < 3.215
+High outliers > 4.695
+
+```{r}
+#Explore books with between 1 and 10 raters and avg ratings which are outliers
+books %>% 
+  select(title, num_pages, average_rating, ratings_count) %>% 
+  filter(between(ratings_count, "1", "10")) %>% 
+  filter(average_rating < 3.215 | average_rating > 4.695)
+```
+
+I will lose 82 books if I exclude these from the dataset, but with a dataset
+with over 10000 observations, this won't matter very much and will also exclude
+potentially unreliable data, so I think the benefits outweigh any potential 
+negatives. I want to investigate the highest and lowest rated books, so it 
+would be beneficial to exclude very high and very low rated books which also 
+have a very low number of raters.
+
+##Actions
+-Select variables title, average_ratings, ratings_count, authors
+-Filter out books with zero ratings
+-Filter out books with outlier ratings that have fewer than 10 raters.
+
+#Questions to ask
+-Which books are the highest and lowest rated? Group these into categories.
+-Which Tolkien book is rated the highest?
+-Find books that are about Tolkien - e.g. contain  Tolkien, "Lord of the Rings",
+"Middle Earth", "Hobbit" in the title but not Tolkien as the author
+
+#Select variables and clean the data
+
+```{r}
+#Select variables that relate to questions
+book_ratings <- books %>% 
+  select(title, authors, average_rating, ratings_count)
+book_ratings
+```
+
+```{r}
+#Exclude books with zero ratings
+book_ratings <- book_ratings %>% 
+  filter(ratings_count != 0)
+```
+
+```{r}
+#Filter out books with 0 ratings
+book_ratings %>% 
+  filter(ratings_count == 0)
+```
+
+```{r}
+#Filters out books that have fewer than 10 raters and an average rating that is
+#a high or low outlier
+book_ratings <- book_ratings %>% 
+   filter(!((ratings_count < 10) & 
+              (average_rating < 3.215 | average_rating > 4.695)))
+```
+
+#Question 1: Which books have the highest and lowest average ratings? Group
+them in categories and find out how many books are in each category.
+##Highest rated: Existential Meditation, The Complete Calvin and Hobbes,
+The Feynman Lectures on Physics Vols 7-8, Harry Potter Boxed Set Books 1-5,
+It's a Magical World (Calvin and Hobbes #11).
+##Lowest rated: Citizen Girl, The Trouble with Pears, A Matter of Trust,
+The Governess; or The Little Female Academy, Alentejo Blue
+
+```{r}
+book_ratings %>% 
+  slice_max(average_rating, n = 20)
+
+book_ratings %>% 
+  slice_min(average_rating, n = 20)
+
+summary(book_ratings) #Finds the summary stats for the new dataset
+```
+##Rating Categories
+The categories I'll be grouping the books into are Very High, High, Medium, Low,
+and Very Low. Very high and very low are the high and low outliers. High are
+above the 3rd quartile value, medium are between the 3rd and 1st quartile 
+values and Low are below the 1st quartile value.
+
+
+```{r}
+book_ratings <- book_ratings %>% 
+  mutate(
+    average_ratings_cat = case_when(
+      average_rating > 4.695 ~ "Very high",
+      average_rating > 4.140 ~ "High",
+      average_rating > 3.780 ~ "Medium",
+      average_rating >= 3.215 ~ "Low",
+      average_rating < 3.215 ~ "Very Low"
+    )
+  ) %>% 
+  arrange(desc(average_rating))
+```
+
+```{r}
+#Counts the number of books in each rating category
+book_ratings %>% 
+  count(average_ratings_cat)
+```
+```{r}
+#Finds the median number of ratings for each category
+book_ratings %>% 
+  group_by(average_ratings_cat) %>% 
+  summarise(avg_rating_num = median(ratings_count))
+```
+
+
+
+#Question 2: Which Lord of the Rings book is rated the highest? 
+The boxed sets are rated the highest, but the highest rated book in the 
+trilogy is Return of the King
+
+```{r}
+#Filter all books that contain Tolkien in the author column
+book_ratings %>% 
+  filter(grepl("Tolkien", authors, ignore.case = TRUE))
+```
+
+#Question 3: -Find books that are about Tolkien but not by him - e.g. contain  
+Tolkien, "Lord of the Rings", "Middle Earth", "Hobbit" in the title but not 
+Tolkien as the author
+
+```{r}
+book_ratings %>% 
+  filter((grepl("Lord of the Rings", title, ignore.case = TRUE)) |
+         (grepl("Middle-earth", title, ignore.case = TRUE)) |
+           (grepl("Hobbit", title, ignore.case = TRUE)) |
+           (grepl("Tolkien", title, ignore.case = TRUE))) %>% 
+  filter(!(grepl("Tolkien", authors, ignore.case = TRUE)))
+```
+
