@@ -27,6 +27,7 @@ names(books)
 sum(is.na(books))
 #Find out whether there are outliers in the numeric variables
 summary(books)
+skimr::skim(books)
 
 ```
 The _num_pages_, _ratings_count_ and _text_reviews_count_ variables have 
@@ -233,5 +234,27 @@ book_ratings %>%
            (grepl("Hobbit", title, ignore.case = TRUE)) |
            (grepl("Tolkien", title, ignore.case = TRUE))) %>% 
   filter(!(grepl("Tolkien", authors, ignore.case = TRUE)))
+```
+
+# Notes from homework recap
+
+```{r}
+#Find the authors with more than 20 books and rank them by their average rating
+books %>%
+  #splits strings that have two or more authors separated by "/"
+  mutate(authors = str_split(authors, "/")) %>% 
+  #Duplicates info for each separate author(?)
+  unnest(authors) %>% 
+  group_by(authors) %>%
+  summarise(author_count = n(),
+         author_average_rating = mean(average_rating)) %>%
+  filter(author_count > 20) %>%
+  arrange(desc(author_average_rating))
+```
+
+```{r}
+books %>% 
+  distinct(publisher) %>% 
+  arrange(publisher)
 ```
 
