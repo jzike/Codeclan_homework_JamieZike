@@ -77,3 +77,11 @@ tidy_hats %>%
   slice_max(observation_count, n = 1)
 ```
 
+# Extension
+## Question 1:  Can you join all 4 credit card datasets together so that you’re left with a dataset that looks like below with 109 rows and 12 columns?
+
+```{r}
+right_join(transaction_base, fraud_base, by = "transaction_id") %>% 
+  left_join(customer_card_data, by = c("credit_card_id" = "card_number"))
+```
+
