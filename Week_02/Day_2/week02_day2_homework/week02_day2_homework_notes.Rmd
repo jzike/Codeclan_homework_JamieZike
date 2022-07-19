@@ -1,0 +1,88 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+# Libraries
+```{r}
+library(tidyverse)
+```
+
+# Question 1 - Load the code_clan_tweets.csv data. Find the number of rows, columns, and list all the variable names
+
+```{r}
+cc_tweets <- read_csv("code_clan_tweets.csv")
+cc_tweets
+#Find number of rows and columns
+dim(cc_tweets)
+#List all variable names
+names(cc_tweets)
+```
+# Question 2 - Find the total number of favourites (stored in favorite_count) that CodeClan tweets have got. Don’t add a tweet’s favorite_count to the total when the tweet was quoted (see the is_quote variable).
+
+```{r}
+cc_tweets %>% 
+  select(favorite_count, is_quote) %>%
+  #Filter out any quoted tweets
+  filter(is_quote == FALSE) %>% 
+  #Get the total number of favorites excluding quotes
+  summarise(sum(favorite_count))
+```
+
+# Question 3 - Summarise the mean number of retweets (retweet_count), split by the type of platform that was used to tweet (source). Again, omit quoted tweets from the mean.
+
+```{r}
+cc_tweets %>% 
+  #Select variables
+  select(is_quote, retweet_count, source) %>%
+  #Filter out any quoted tweets
+  filter(is_quote == FALSE) %>% 
+  #Group by platform
+  group_by(source) %>% 
+  #Summarise mean number of retweets for each platform
+  summarise(avg_retweets = mean(retweet_count)) %>% 
+  #Arrange in descending order
+  arrange(desc(avg_retweets))
+```
+
+# Question 4 - Count the total number of likes (i.e. total of favorite_count), split by media type, and arrange them from most likes to least. Assume that any tweets without a listed media type are of type “text”.
+
+```{r}
+cc_tweets %>% 
+  mutate(media_type = coalesce(media_type, "text")) %>% 
+  select(media_type, favorite_count) %>% 
+  group_by(media_type) %>% 
+  summarise(total_likes = sum(favorite_count)) %>% 
+  arrange(desc(total_likes))
+```
+
+
+# Question 5 - Find the mean number of characters that a CodeClan tweet contains. You can either find a way to count the text in the text variable, or use the variable display_text_width which contains a count. Checking both would be a good idea if possible to see if they match (but it’s not essential).
+
+```{r}
+cc_tweets %>% 
+  mutate(text_length = str_length(text), .after = text) %>% 
+    summarise(avg_tweet_length = mean(text_length))
+  
+cc_tweets %>% 
+  summarise(avg_tweet_length = mean(display_text_width))
+```
+
+# Question 6 - The code_clan_info.csv data file contains status_url along with other info. Load this in, and join it to the code_clan_tweets tibble, so that you have a status_url for each tweet. Decide which variable to join the tibbles on.
+
+```{r}
+cc_info <- read_csv("code_clan_info.csv")
+
+cc_tweets_joined <- left_join(cc_tweets, cc_info, by = "tweet_id")
+```
+
+# Question 7 - From your new joined data, create a new tibble codeclan_hashtags containing only tweet_id and hashtags, then convert hashtags into lowercase for analysis. Keep only those tweets with hashtags.
+
+```{r}
+codeclan_hashtags <- cc_tweets_joined %>% 
+  select(tweet_id, hashtags) %>% 
+  drop_na(hashtags) %>% 
+  mutate(hashtags = str_to_lower(hashtags))
+```
+
+
