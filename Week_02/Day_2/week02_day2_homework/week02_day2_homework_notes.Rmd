@@ -29,6 +29,15 @@ cc_tweets %>%
   summarise(sum(favorite_count))
 ```
 
+```{r}
+cc_tweets %>% 
+  select(is_retweet) %>% 
+  head() %>% 
+  #The variable is already a boolean vector so we don't need to add == FALSE. If you filter and just include the variable name, it will return the TRUE values. So adding ! will return just the false values
+  filter(!is_retweet)
+```
+
+
 # Question 3 - Summarise the mean number of retweets (retweet_count), split by the type of platform that was used to tweet (source). Again, omit quoted tweets from the mean.
 
 ```{r}
