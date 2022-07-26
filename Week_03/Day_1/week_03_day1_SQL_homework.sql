@@ -180,5 +180,45 @@ FROM employees
 WHERE (first_name IS NOT NULL) AND (last_name IS NOT NULL) AND (department IS NOT NULL);
 
 
+/*
+ * Add the year to the employees start date to the badge label
+ */
+
+SELECT 
+	first_name,
+	last_name,
+	department,
+	start_date,
+	concat(first_name, ' ', last_name, ' - ', department, ' ( joined ', TO_CHAR(start_date, 'Month'), EXTRACT (YEAR FROM start_date), ')') AS badge_label
+FROM employees 
+WHERE (first_name IS NOT NULL) AND (last_name IS NOT NULL) AND (department IS NOT NULL) AND (start_date IS NOT NULL);
+
+--Scratchpad
+SELECT EXTRACT (MONTH FROM NOW()), TO_CHAR(NOW(), 'Month')
+
+
+
+/*
+ * Q 18 - Return the first_name, last_name and salary of all employees together with a new column called salary class with a value 'low' where salary is less than 40,000 
+ * and value 'high' where salary is greater than or equal to 40,000
+ */
+
+SELECT 
+	first_name,
+	last_name,
+	salary,
+	CASE
+		WHEN salary < 40000 THEN 'low'
+		WHEN salary >= 40000 THEN 'high'
+		WHEN salary IS NULL THEN 'NULL SALARY'
+--In industry it is better not to use the word 'NULL' in outputs because programs might deal with this as a NULL field.
+		ELSE 'UNKNOWN'
+	END AS salary_class
+FROM employees 
+	
+
+
+
+
 
 
