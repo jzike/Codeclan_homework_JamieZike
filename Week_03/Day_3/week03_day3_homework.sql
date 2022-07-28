@@ -25,7 +25,7 @@ SELECT *
 FROM employees 
 WHERE last_name ~ '^A.'
 ORDER BY salary DESC NULLS LAST 
-LIMIT 10
+LIMIT 10;
 
 --Q4 - Obtain a count by department of the employees who started work with the corporation in 2003.
 
@@ -173,7 +173,8 @@ SELECT
 FROM employees 
 WHERE first_name IS NULL
 GROUP BY department
-HAVING count(id) >= 2;
+HAVING count(id) >= 2
+ORDER BY count_no_first_name DESC NULLS LAST, department ASC NULLS LAST;
 
 
 --Q15 - Return a table of those employee first_names shared by more than one employee, together with a count of the number of times 
@@ -206,4 +207,8 @@ SELECT
 FROM employees
 GROUP BY department ;
 
+
+--grabs the first # of rows including ties
+
+FETCH FIRST 1 ROWS WITH TIES
 
