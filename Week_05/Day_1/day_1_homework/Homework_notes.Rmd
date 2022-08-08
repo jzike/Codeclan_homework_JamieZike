@@ -1,0 +1,149 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+# Libraries
+
+```{r}
+library(tidyverse)
+library(CodeClanData)
+library(scales)
+```
+
+# Data
+
+```{r}
+qb_revenue <- qb_revenue_breakdown
+qb_monthly_sales <- qb_monthly_sales
+qb_competitors <- qb_competitors
+qb_device <- qb_device_data
+```
+
+
+
+# 2.1 Part 1
+
+## Q1: Take the data in the dataset qb_revenue_breakdown and make a stacked bar chart showing the sources of revenue across the two years in the dataset.
+
+```{r}
+qb_revenue %>% 
+  ggplot(aes(x = Year,
+             y = Revenue,
+             fill = Product)) + 
+  geom_col()
+  labs(x = "Year",
+       y = "Revenue",
+       title = "Sources of revenue in 2018 and 2019")
+```
+
+## Q2: Make a line chart showing monthly sales of the “flagship product” - the ‘KwikBit Unit 1’ - over the last year. This data is inside qb_monthly_sales, but you will need to use filter() or subset() (base R).
+
+```{r}
+qb_monthly_sales %>% 
+  filter(Cashflow == "Kwikbit Unit 1 Sales") %>% 
+  ggplot(aes(x = Date,
+             y = Amount)) +
+  geom_line() 
+  labs(x = "Date",
+       y = "Amount",
+       title = "Monthly Sales of Kwikbit Unit 1",
+       subtitle = "Data from monthly sales\n")
+```
+
+## Q3: Make a line chart showing monthly revenue and costs over the last year. This data is also in qb_monthly_sales.
+
+```{r}
+qb_monthly_sales %>% 
+  filter(Cashflow != "Kwikbit Unit 1 Sales" & grepl("2019", Date)) %>% 
+  ggplot(aes(x = Date,
+             y = Amount,
+             colour = Cashflow)) +
+  geom_line() +
+  labs(x = "Date",
+       y = "Amount",
+       title = "Monthly revenue and costs for 2019",
+       fill = "Cash flow")
+```
+
+## Q4: Show annual sales of personal fitness trackers over the last 5 years broken down by company as a ribbon plot (use geom_area). This data is in qb_competitors.
+
+```{r}
+qb_competitors %>% 
+  ggplot(aes(x = Year,
+             y = Revenue,
+             colour = Company)) +
+  geom_area() +
+  scale_y_continuous(labels = scales::comma) +
+  labs(title = "Competitor fitness tracker sales for the past 5 years")
+```
+
+## Q5: Now show the sales from the four competitors as a line graph. Include an extra layer that shows the data points used to make the lines.
+
+```{r}
+qb_competitors %>% 
+  ggplot(aes(x = Year,
+             y = Revenue,
+             colour = Company)) +
+  geom_line() +
+  geom_point() +
+  scale_y_continuous(labels = scales::comma) +
+  labs(title = "Competitor fitness tracker sales for the past 5 years")
+```
+
+## Q6: Now the company wants to compare the number of steps that their device counts vs. their competitors. Make a line graph of the number of steps throughout time, and use faceting to compare between companies and people. The data for this is in qb_device_data.
+
+```{r}
+qb_device %>% 
+  group_by(device, id, hours) %>% 
+  summarise(total_steps_counted = sum(counts)) %>% 
+  ggplot(aes(x = hours,
+         y = total_steps_counted)) +
+  geom_line() +
+  facet_grid(device ~ id) +
+  labs(x = "\nTime tracked",
+       y = "Steps counted",
+       title = "Number of steps counted over time on different devices",
+       subtitle = "Comparison between Qikbit and top competitors for 5 participants\n")
+```
+
+# 2.2 Part 2
+
+## Q1 - Take the plots that you produced in part one and now polish them by:
+
+1. Adding appropriate labels
+Edited above
+
+2. Changing the scales and coordinates when appropriate.
+3. Applying a unified theme, which is described below:
+
+Graphs should have white backgrounds, and use colour sparingly.
+There should be faint grid lines.
+Font sizes should be ~12pt although titles should be slightly larger and axis labels can be slightly smaller.
+All plots should use colours from the following company colour scheme.
+
+
+```{r}
+
+qb_theme <- function() {
+  theme(
+    #add white background
+    panel.background = element_blank,
+    #modify grid
+    panel.grid.major.x = element_line(colour = "#B6A7B5",
+                                      size = 0.25),
+    panel.grid.minor.x = element_blank(),
+    panel.grid.major.y = element_line(colour = "#B6A7B5",
+                                      size = 0.5),
+    panel.grid.minor.y = element_blank(),
+    #axis text slightly smaller than default
+    axis.text = element_text(size = rel(0.75)),
+    #axis titles slightly larger than default
+    axis.title = element_text(size = rel(1.5)),
+    
+    
+    
+    
+  )
+}
+```
+
