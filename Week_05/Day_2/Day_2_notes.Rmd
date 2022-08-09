@@ -1,0 +1,208 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+# Libraries
+
+```{r}
+library(tidyverse)
+library(CodeClanData)
+library(ggrepel)
+```
+
+# Q1 - Load in the libraries you need, and look at the backpack data. Take note of variable names and dimensions.
+
+There are 9 variables:
+-backpack_weight (num)
+-body_weight(num)
+-ratio (num - ratio of backpack weight to bodyweight)
+-back_problems (binary numeric - 1 for back problems and a 0 for no back problems)
+-major (categorical)
+-year (num - probably year of study at uni)
+-sex (categorical - male/female)
+-status (G/U - probably means graduate/undergraduate)
+-units (num - not sure what this means)
+
+Dimensions - 100 observations of 9 variables.
+
+```{r}
+backpack_data <- backpack
+names(backpack_data)
+dim(backpack_data)
+#get summary of data that includes some basic descriptive stats for numeric variables
+summary(backpack_data)
+#check that back_problems is binary numeric
+backpack_data %>% 
+  distinct(back_problems)
+```
+
+# Q2 - What is the distribution of backpack weights that students are carrying? Choose an appropriate graph to show the distribution.
+
+The histogram shows the distribution of backpack weights among university students. There are some outliers with very heavy backpacks, with the heaviest weighing 35 lbs.
+
+```{r}
+backpack_data %>% 
+  ggplot(aes(x = backpack_weight)) +
+  geom_histogram(col = "white") +
+  labs(x = "Backpack weight",
+       y = "Number of students") +
+  ggtitle("Distribution of backpack weights among university students", subtitle = "Data from 100 students")
+```
+
+# Q3 - Are there differences in backpack weight between sex?
+
+The boxplot shows that there are minimal differences in backpack weight between male and female students. First, the interquartile ranges for both groups overlap and the median for each group overlaps with the interquartile range of the other group. This indicates that there aren't any significant differences between the groups. Second, the medians for both groups are very close together, also indicating no significant differences. However, the interquartile range for female students is shorter, indicating that the data is clustered around the median. This clustering of data indicates that on average, female students' backpack weights don't differ by person as much as male students, since the interquartile range for male students is more spead out. We can see that there are a few outliers with very heavy backpacks for each group.
+
+```{r}
+backpack_data %>% 
+  ggplot(aes(x = sex,
+         y = backpack_weight)) +
+  geom_boxplot(outlier.color = "red") +
+  geom_jitter(colour = "grey50", size = 0.4, alpha = 0.8) +
+  coord_flip() +
+  labs(x = "Sex",
+       y = "Backpack weight") +
+  ggtitle("Minimal differences between male and female students' backpack weights")
+```
+
+# Q4 - What is the relationship between body weight and backpack weight?
+
+There is a positive relationship between a student's body weight and their backpack weight. This means that student backpack weight tends to increase as their weight increases. The relationship between the two variables doesn't look particularly strong, but makes sense because the weight you can lift comfortably tends to increase as your body weight increases. Looking at the blue dots (indicating students who reported back problems), it is interesting to note that many of them would be above where the (eyeballed) best line of fit would be for the data. This could indicate that students with back problems could be carrying backpacks that are too heavy for them.
+
+```{r}
+backpack_data %>% 
+  ggplot(aes(x = body_weight,
+             y = backpack_weight)) +
+  geom_point(aes(colour = case_when(
+                          back_problems == 1 ~ "Yes",
+                          back_problems == 0 ~ "No",
+                          TRUE               ~ "Unknown"))) +
+  labs(x = "Body weight",
+       y = "Backpack weight",
+       colour = "Reported back problems") +
+  ggtitle("Positive relationship between student body weight and backpack weight", 
+          subtitle = "Including data on reported back problems")
+```
+
+# Q5 - Is this relationship different between men and women? Choose an appropriate plot and interpret your findings.
+
+The faceted scatterplots below show that the slope of the line of best fit for female students is much steeper than for male students. This seems to indicate that for every pound increase in bodyweight for females students, they carry more backpack weight than male students. It is worth noting that more female students reported back problems than male students. This might provide us with evidence that the hypothesis (that I just made up) that back pain is often caused by carrying too much weight for a person's bodyweight is true.
+
+```{r}
+backpack_data %>% 
+  ggplot(aes(x = body_weight,
+             y = backpack_weight)) +
+  geom_point(aes(colour = case_when(
+                          back_problems == 1 ~ "Yes",
+                          back_problems == 0 ~ "No",
+                          TRUE               ~ "Unknown"))) +
+  labs(x = "Body weight",
+       y = "Backpack weight",
+       colour = "Reported back problems") +
+  facet_wrap(~ sex) +
+  ggtitle("Comparing the body/backpack weight relationship for male and female students", 
+          subtitle = "Including data on reported back problems")
+```
+
+# Q6 - What proportion of students report back pain?
+
+The doughnut chart below shows that out of the 100 students, 32 reported back pain and 68 reported no back pain. 32% of students reported back pain.   
+
+```{r}
+#This value corresponds to the hole in the doughnut chart
+hsize <- 4
+
+#Create a table that groups students by whether or not they reported back problems
+proportion_back_problems <- backpack_data %>% 
+  group_by(back_problems) %>% 
+  #counts number of students in each group (1, 0)
+  summarise(count = n()) %>% 
+  #adds the hsize variable to the table so it can be used in the chart
+  mutate(x = hsize) %>% 
+  #transforms the back_problems values to say "yes" if a 1 is reported and "no" if another value is reported
+  mutate(back_problems = if_else(back_problems == 1, "Yes", "No"))
+
+proportion_back_problems %>% 
+  #here x is just the size of the hole we want b/c we only want a single column
+  ggplot(aes(x = hsize, y = count, fill = back_problems)) +
+  geom_col(colour = "black") +
+  #label the counts for each group
+  geom_text(aes(label = count),
+            position = position_stack(vjust = 0.5)
+            ) +
+  #This curves the stacked bar around on itself to create the circle
+  coord_polar(theta = "y") +
+  #This creates the hole b/c without this it's a pie chart
+  xlim(c(0.2, hsize + 0.5)) +
+  theme(panel.background = element_rect(fill = "white"),
+        panel.grid = element_blank(),
+        axis.title = element_blank(),
+        axis.ticks = element_blank(),
+        axis.text = element_blank()) +
+  labs(fill = "Back problems") +
+  ggtitle("Proportion of students reporting back problems")
+```
+
+# Q7 - Is this proportion different between men and women?
+
+The stacked bar charts below show a clear difference in the proportion of female and male students reporting back problems. It is clear that female students were much more likely to report back problems compared with male students.
+
+```{r}
+backpack_data %>% 
+  group_by(sex, back_problems) %>% 
+  summarise(count = n()) %>% 
+  ggplot(aes(x = sex,
+         y = count)) +
+  geom_col(aes(fill = case_when(
+                          back_problems == 1 ~ "Yes",
+                          back_problems == 0 ~ "No",
+                          TRUE               ~ "Unknown"))) +
+  geom_text(aes(label = count), position = position_stack(vjust = 0.1)) +
+  labs(x = "Sex",
+       y = "Count",
+       fill = "Reported back problems") +
+  ggtitle("Proportion of male and female students reporting back problems")
+```
+
+Q8 - Now you’ve investigated your data separately, create plots to describe the relationship between backpack weight, body weight, gender and reported backpain.
+
+The scatter plots below show that for female students with and without back problems, there seems to be a weak positive correlation between body weight and backpack weight. There isn't really any evidence for the hypothesis that female students who weigh less but carry heavier backpacks might be more likely to report back pain. For male students who reported back pain, there's not really enough data points to spot a trend in the data. For male students who didn't report back pain, there is the same general positive correlation between body weight and backpack weight as in the scatter plot in Q4.
+
+```{r}
+backpack_data %>% 
+  mutate(back_problems = if_else(back_problems == 1, "Yes", "No")) %>% 
+  ggplot(aes(x = body_weight,
+             y = backpack_weight)) +
+  geom_point() +
+  labs(x = "Body weight",
+       y = "Backpack weight"#,
+       #colour = "Reported back problems"
+       ) +
+  facet_grid(back_problems ~ sex) +
+  ggtitle("Relationship between backpack and body weight", 
+          subtitle = "Comparisons between female and male students with and without back problems")
+```
+
+The box plots for the female students show that while there is a difference in the medians for the group with back problems and the group without, it probably is not quite significant. The median for the back problems group overlaps with the interquartile range of the group with no back problems. 
+
+The box plots for male students show that the median for the group of students with back pain is right on the edge of the upper quartile range of the group of students without back pain. Since there are not many data points for the back problems group, it might be worth investigating further by collecting data on body to backpack weight ratio from male students with back problems.
+
+However, the interquartile range for both groups of students with back problems is fairly wide, perhaps showing that the backpack/body weight ratio does not have an impact on whether or not students reported back problems.
+
+
+```{r}
+backpack_data %>% 
+  mutate(back_problems = if_else(back_problems == 1, "Yes", "No")) %>% 
+  ggplot(aes(x = back_problems,
+         y = ratio)) +
+  geom_boxplot(outlier.color = "red") +
+  geom_jitter(colour = "grey50", size = 0.4, alpha = 0.8) +
+  coord_flip() +
+  labs(x = "Back Problems",
+       y = "Ratio") +
+  facet_wrap(~ sex) +
+  ggtitle("Backpack/body weight ratio of male and female students",
+          subtitle = "Comparisons between students with and without reported back problems")
+```
+
