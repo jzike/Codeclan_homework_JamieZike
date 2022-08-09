@@ -54,14 +54,14 @@ qb_monthly_sales %>%
 
 ```{r}
 qb_monthly_sales %>% 
-  filter(Cashflow != "Kwikbit Unit 1 Sales" & grepl("2019", Date)) %>% 
+  filter(Cashflow != "Kwikbit Unit 1 Sales") %>% 
   ggplot(aes(x = Date,
              y = Amount,
              colour = Cashflow)) +
   geom_line() +
   labs(x = "Date",
        y = "Amount",
-       title = "Monthly revenue and costs for 2019",
+       title = "Monthly revenue and costs for 2018/2019",
        fill = "Cash flow")
 ```
 
@@ -71,7 +71,7 @@ qb_monthly_sales %>%
 qb_competitors %>% 
   ggplot(aes(x = Year,
              y = Revenue,
-             colour = Company)) +
+             fill = Company)) +
   geom_area() +
   scale_y_continuous(labels = scales::comma) +
   labs(title = "Competitor fitness tracker sales for the past 5 years")
