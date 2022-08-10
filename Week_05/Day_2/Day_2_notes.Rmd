@@ -52,7 +52,7 @@ backpack_data %>%
 
 # Q3 - Are there differences in backpack weight between sex?
 
-The boxplot shows that there are minimal differences in backpack weight between male and female students. First, the interquartile ranges for both groups overlap and the median for each group overlaps with the interquartile range of the other group. This indicates that there aren't any significant differences between the groups. Second, the medians for both groups are very close together, also indicating no significant differences. However, the interquartile range for female students is shorter, indicating that the data is clustered around the median. This clustering of data indicates that on average, female students' backpack weights don't differ by person as much as male students, since the interquartile range for male students is more spead out. We can see that there are a few outliers with very heavy backpacks for each group.
+The boxplot shows that there are minimal differences in backpack weight between male and female students. First, the interquartile ranges for both groups overlap and the median for each group overlaps with the interquartile range of the other group. This indicates that there aren't any significant differences between the groups. Second, the medians for both groups are very close together, also indicating no significant differences. However, the interquartile range for female students is shorter, indicating that the data is clustered around the median. This clustering of data indicates that on average, female students' backpack weights don't differ by person as much as male students, since the interquartile range for male students is more spread out. We can see that there are a few outliers with very heavy backpacks for each group.
 
 ```{r}
 backpack_data %>% 
@@ -87,7 +87,7 @@ backpack_data %>%
 
 # Q5 - Is this relationship different between men and women? Choose an appropriate plot and interpret your findings.
 
-The faceted scatterplots below show that the slope of the line of best fit for female students is much steeper than for male students. This seems to indicate that for every pound increase in bodyweight for females students, they carry more backpack weight than male students. It is worth noting that more female students reported back problems than male students. This might provide us with evidence that the hypothesis (that I just made up) that back pain is often caused by carrying too much weight for a person's bodyweight is true.
+The faceted scatterplots below show that the slope of the line of best fit for female students is much steeper than for male students. This seems to indicate that for every pound increase in bodyweight for female students, they carry more backpack weight than male students. It is worth noting that more female students reported back problems than male students. This might provide us with evidence that the hypothesis (that I just made up) that back pain is often caused by carrying too much weight for a person's bodyweight is true.
 
 ```{r}
 backpack_data %>% 
@@ -118,7 +118,7 @@ proportion_back_problems <- backpack_data %>%
   group_by(back_problems) %>% 
   #counts number of students in each group (1, 0)
   summarise(count = n()) %>% 
-  #adds the hsize variable to the table so it can be used in the chart
+  #adds the hsize variable to the table so there's a common value between the two rows - allows us to make one #column
   mutate(x = hsize) %>% 
   #transforms the back_problems values to say "yes" if a 1 is reported and "no" if another value is reported
   mutate(back_problems = if_else(back_problems == 1, "Yes", "No"))
