@@ -13,7 +13,7 @@ library(CodeClanData)
 library(bslib)
 
 #Fix names and calories variable
-beer_data <- beer_data %>% 
+beer_data <- beer %>% 
   mutate(brewer = case_when(
     grepl("Yueng", brewer) ~ "D.G. Yuengling",
     grepl("Desno", brewer) ~ "Desnoes & Geddes (Jamaica)",
