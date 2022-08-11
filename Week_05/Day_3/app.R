@@ -32,8 +32,7 @@ brewer_selection <- beer_data %>%
 # User Interface
 ui <- fluidPage(
   
-  # theme = bs_theme(bootswatch = 'flatly'),
-  # theme = 'path_to/my_stylesheet.css',
+theme = bs_theme(bootswatch = 'darkly'),
   
   titlePanel(tags$h1("Compare brewers!")),
   
@@ -44,7 +43,7 @@ ui <- fluidPage(
            
            
            selectInput(inputId = "brewer_1_input",
-                       label = tags$i("Brewer 1?"),
+                       label = "Brewer 1?",
                        choices = brewer_selection
            )
     ),
@@ -59,8 +58,7 @@ ui <- fluidPage(
   ),
   plotOutput("calorie_plot"),
   
-  plotOutput("abv_plot",
-            click = "plot_click")
+  plotOutput("abv_plot")
 )
 
 
