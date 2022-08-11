@@ -1,0 +1,88 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+beer_data <- beer
+```
+
+```{r}
+beer_data %>% 
+  distinct(brewer) %>% 
+  arrange(brewer)
+```
+D.G. Yuengilng	
+D.G. Yuengling	
+
+Desnoes - Goeddes (Jamaica)	
+Desnoes & Geddes (Jamaica)	
+
+```{r}
+beer_data <- beer_data %>% 
+  mutate(brewer = case_when(
+    grepl("Yueng", brewer) ~ "D.G. Yuengling",
+    grepl("Desno", brewer) ~ "Desnoes & Geddes (Jamaica)",
+    TRUE                   ~ brewer)
+) %>% 
+  mutate(calories = as.numeric(calories))
+```
+
+```{r}
+brewer_selection <- beer_data %>% 
+  group_by(brewer) %>% 
+  summarise(count = n()) %>% 
+  filter(count >= 5) %>% 
+  pull(brewer)
+```
+
+```{r}
+beer_data <- beer_data %>% 
+  mutate(high_or_low_cal = case_when(
+    calories <= median(calories) ~ "Low Calorie",
+    calories > median(calories) ~ "High Calorie"
+  )) %>% 
+mutate(high_or_low_abv = case_when(
+  percent > 5 ~ "High ABV",
+  percent <=5 ~ "Low ABV"
+))
+```
+
+```{r}
+beer_data %>% 
+  filter(brewer == "Adolph Coors" |
+           brewer == "Anheuser Busch") %>% 
+  ggplot(aes(x = brewer,
+             y = calories)) +
+  geom_boxplot() + 
+  geom_jitter(colour = "grey0", size = 1) +
+  coord_flip() +
+  labs(x = "Brewer",
+       y = "Number of calories") +
+  theme_minimal()
+```
+
+```{r}
+beer_data %>% 
+  filter(brewer == "Adolph Coors" |
+           brewer == "Anheuser Busch") %>% 
+  ggplot(aes(x = brewer,
+             y = percent)) +
+  geom_boxplot() + 
+  geom_jitter(colour = "grey0", size = 1) +
+  coord_flip() +
+  labs(x = "Brewer",
+       y = "Alcohol by volume (ABV)") +
+  theme_minimal()
+```
+
+
+backpack_data %>% 
+  ggplot(aes(x = sex,
+         y = backpack_weight)) +
+  geom_boxplot(outlier.color = "red") +
+  geom_jitter(colour = "grey50", size = 0.4, alpha = 0.8) +
+  coord_flip() +
+  labs(x = "Sex",
+       y = "Backpack weight") +
+  ggtitle("Minimal differences between male and female students' backpack weights")
