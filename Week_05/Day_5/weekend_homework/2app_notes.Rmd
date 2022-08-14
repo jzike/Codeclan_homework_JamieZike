@@ -1,0 +1,116 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+```{r}
+library(tidyverse)
+library(CodeClanData)
+library(plotly)
+```
+
+```{r}
+game_sales <- game_sales %>% janitor::clean_names()
+```
+
+
+
+# Explore data
+
+```{r}
+#see variable names
+game_sales %>% 
+  names()
+
+#see types of variables and range of numeric variables
+game_sales %>% 
+  summary()
+
+#counts the number of nas in each column - there are no NAs in the dataset.
+game_sales %>% 
+  map(~sum(is.na(.)))
+
+```
+
+# Assumptions
+1) Users and critics are independent groups - e.g. critics aren't also raters in the user group and vice versa.
+2) Critic ratings and user ratings contain the mean score from multiple critics/users.
+3) Critic mean ratings are on a 100 point scale and user ratings are on a 10 point scale
+
+
+
+# Write clean_data csv in R script
+
+Main actions:
+- Create factored year_choices variable where the years before 2000 are in a new group called "Before 2000"
+- Convert user rating scale to be a 100 point scale by multiplying user rating by 100
+- Create a critic_user_diff scale showing the difference between the mean critic score and the mean user score
+- Find standard deviation of critic_user_diff variable and use this to find out which score differences fall outside 2 standard deviations from the mean. These are cases where the user score and the critic score are significantly different.
+- Verify that both the critic scale and user scale are on a 100 point scale
+- Write clean csv file.
+
+# Draft graphs for shiny app
+
+```{r}
+game_sales_clean <- read_csv("data/game_sales_clean.csv")
+```
+# Graph 1
+
+This graph shows the relationship between user scores and critic scores and highlights cases where the user score and critic score are significantly different, indicating that critics and users disagree for some reason. I've used plotly here so that users can pick out individual games and see the name of the game and the user and critic scores. This allows them to clearly pick out games that received high scores from critics and users and low scores from critics and users. Using this graph they can see that generally critics and users assign similar ratings - as the user score increases, the critic score also tends to increase. I wanted users to be able to pinpoint at a glance which games that critics and users disagreed on. These are cases that should be investigated further to see if there is a reason why critics and users disagree.
+
+```{r}
+game_sales_clean %>% 
+plot_ly(x = ~user_score,
+        y = ~critic_score,
+        color = ~stat_diff,
+        type = "scatter",
+        mode = "markers",
+        hoverinfo = "text",
+        text = paste("Game: ", game_sales_clean$name,
+                     "<br>",
+                     "User score: ", game_sales_clean$user_score,
+                     "<br>",
+                     "Critic score: ", game_sales_clean$critic_score)) %>% 
+  layout(title = "<b>\nDifferences between critic and user game ratings \n <b>",
+         xaxis = list(title = "User score"),
+         yaxis = list(title = "Critic score"),
+         legend = list(title = list(text = "Score disagreement?"),
+                       x = 100, y = 0.5))
+```
+
+# Graph 2
+
+This graph allows users to see how many games had different ratings in a given year and for their specified genres (in the dashboard.). Users could isolate specific genres within a year to see the distribution of different ratings for different genres. It could be useful to find out what kind of games attract higher ratings - e.g. shooter and fighting games might attract for T and M ratings.
+
+```{r}
+game_sales_clean %>% 
+  #filter(year_choices == "2001") %>% 
+  ggplot(aes(x = factor(rating, levels = c("E",
+                                           "E10+",
+                                           "T",
+                                           "M")))) +
+  geom_bar(fill = "grey30") +
+  labs(title = "Ratings by year",
+       x = "Assigned rating",
+       y = "Count") 
+```
+
+# Table 1
+
+This table shows the top ten user scored games for the selected year and the selected genres. This table is meant to bring together the data from the two graphs in a way so that users can see all the relevant information for the top 10 user-rated games for any year that they're interested in. This will be in a separate tab since it will take up a lot of space.
+
+```{r}
+game_sales_clean %>% 
+      select(name,
+             genre,
+             publisher,
+             user_score,
+             critic_score,
+             rating,
+             platform
+             ) %>% 
+      slice_max(user_score, n = 10)
+```
+
+
