@@ -1,0 +1,95 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+#Libraries
+
+```{r}
+library(tidyverse)
+library(infer)
+library(janitor)
+```
+
+# Q1 - Load the data again, clean_names(), and re-familiarise yourself with it
+
+```{r}
+ames_houses <- read_csv("ames.csv") %>% clean_names()
+```
+
+```{r}
+ames_houses %>% 
+  skimr::skim()
+
+ames_houses %>% 
+  distinct(neighborhood)
+```
+
+# Q2 - Investigate the distribution of lot_area. Is the distribution roughly normal? If not, what problems do you find?
+
+The distribution isn't normal - the data is positively skewed and there are quite a few outlier houses with very large lot areas. This isn't very surprising for Iowa since it's a state with some built-up areas, but also a lot of farms and houses in semi-rural/rural areas that tend to have large lots. This is a bit hard to see on the histogram since the count isn't very high for the houses with large lots, but it's easier to see on the box-plot.
+
+```{r}
+ames_houses %>% 
+  ggplot(aes(x = lot_area)) +
+  geom_histogram(col = "white", binwidth = 1000)
+
+ames_houses %>% 
+  ggplot(aes(x = lot_area,
+             y = nrow(ames_houses$lot_area))) +
+  geom_boxplot(outlier.color = "red")
+```
+
+```{r}
+options(scipen = 999)
+shapiro.test(ames_houses$lot_area)
+```
+# Q3 - Compute and visualise a bootstrap sampling distribution for the mean(lot_area) of the sold houses.
+
+
+
+```{r}
+infer_resample <- ames_houses %>% 
+  specify(response = lot_area) %>% 
+  generate(reps = 5000, type = "bootstrap") %>% 
+  calculate(stat = "mean")
+
+infer_resample %>% 
+  ggplot(aes(x = stat)) +
+  geom_histogram(col = "white")
+```
+
+# Q4 - Use your bootstrap distribution to calculate a 95% CI for mean(lot_area), and visualise it on the distribution
+
+```{r}
+infer_ci_95 <- infer_resample %>% 
+  get_ci(level = 0.95, type = "percentile")
+
+infer_resample %>% 
+  visualise(bins = 30) +
+  shade_ci(endpoints = infer_ci_95)
+```
+
+# Q5 - You would like to know the mean(lot_area) of the sold houses with higher confidence. Calculate the 99% CI for this variable (you can re-use your bootstrap distribution from above). Is it narrower or broader than the 95% CI? Does that make sense?
+
+It is broader and that makes sense because we can expect more of the bootstrap sample means to fall within the 99% CI than the 95% CI. The total data falling outside the 99% CI highlighted on the graph below should only be 0.5% on each side of the shaded area. For the 95% CI, we can expect 2.5% of the data to fall outside each side of the shaded area on the histogram above.
+
+```{r}
+infer_ci_99 <- infer_resample %>% 
+  get_ci(level = 0.99, type = "percentile")
+
+infer_resample %>% 
+  visualise(bins = 30) +
+  shade_ci(endpoints = infer_ci_99)
+```
+
+# Q6 - Calculate the point estimate of the mean(lot_area)
+
+```{r}
+infer_resample %>%  
+  summarise(
+    mean_means_lot_area = mean(stat)
+  )
+```
+
