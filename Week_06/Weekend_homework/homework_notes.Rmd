@@ -1,0 +1,297 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+---
+
+# Libraries
+```{r}
+library(tidyverse)
+library(infer)
+```
+
+
+
+# 1.1 Hypothesis testing - practical
+
+## Data
+```{r}
+data(msleep)
+```
+
+
+## Q1 - Explore the dataset and familiarise yourself with it.
+
+```{r}
+names(msleep)
+head(msleep)
+skimr::skim(msleep)
+```
+
+## Q2 - Jabberwockies sleep for around 7 hours a night, on average. Perform an appropriate statistical test to determine whether the mean sleep_total in the sampled population of animal types differs from the typical value for jabberwockies.
+
+H0 - Jabberwockies mean sleep_total = Animal pop mean sleep_total
+
+H1 - Jabberwockies mean sleep_total != Animal pop mean sleep_total
+
+Alpha level - 0.05 (95% CI)
+
+```{r}
+#visualise the spread of the variable of interest
+msleep %>% 
+  ggplot(aes(x = sleep_total)) +
+  geom_histogram(col = "white")
+```
+```{r}
+mean(msleep$sleep_total)
+```
+
+
+
+The data looks multi-modal from this distribution - the Jabberwockie sleep_total mean doesn't look completely different from the other sleep_totals observed in the animal dataset. There are definitely other animals observed in the dataset with sleep_total around 7 hours as well as above and below that value. However, when we calculate the mean value for the animal population, it is over 3 hours more than the mean sleep_total for Jabberwockies. At this point, I would be predicting a significant difference.
+
+
+```{r}
+#generate null distribution
+null_distribution <- msleep %>% 
+  specify(response = sleep_total) %>% 
+  hypothesise(null = "point", mu = 7) %>% 
+  generate(reps = 5000, type = "bootstrap") %>% 
+  calculate(stat = "mean")
+```
+
+```{r}
+#calculate the observed stat - in this case the mean sleep_total for the population of animals
+observed_stat <- mean(msleep$sleep_total)
+```
+
+
+```{r}
+#visualise the observed stat against the null distribution.
+null_distribution %>% 
+  visualise(bins =30) +
+  shade_p_value(obs_stat = observed_stat, direction = "both")
+```
+          
+```{r}
+p_value <- null_distribution %>% 
+  get_p_value(obs_stat = observed_stat, direction = "both")
+```
+
+The p-value is less than 0.001, which is less than our stated alpha value of 0.05. This means that we can reject the null hypothesis as there is evidence that there is a significant difference between the mean hours of sleep for Jabberwockies (7 hours) and the mean hours of sleep for the animal population.
+
+
+
+## Q3 - Perform an appropriate statistical test to determine whether omnivores sleep for significantly longer than herbivores, on average.
+
+This question is looking for an independent two-sample hypothesis test b/c omnivores and herbivores are two independent groups within the total animal population. Although what they eat overlaps (e.g. they both eat plants), animals are either labelled as an omnivore or an herbivore, not both.
+
+H0 - Omnivores mean sleep_total <= Herbivores mean sleep_total
+
+H1 - Omnivores mean sleep_total > Herbivores mean sleep_total
+
+Alpha - 0.05 (95% CI)
+
+```{r}
+#check the distinct classes of animal
+
+msleep %>% 
+  group_by(vore) %>% 
+  summarise(count = n())
+```
+
+```{r}
+#visualise groups using a boxplot
+
+msleep %>% 
+  filter(vore == "omni" | vore == "herbi") %>% 
+  ggplot(aes(x = sleep_total, y = vore)) +
+  geom_boxplot(outlier.color = "red") +
+  geom_jitter()
+```
+
+The spread of the IQR for herbivores is very wide and completely overlaps with the spead for omnivores, so I'm not expecting that we'll get evidence for H1 at this point.
+
+```{r}
+#generate the null distribution
+null_distribution <- msleep %>% 
+  filter(vore == "omni" | vore == "herbi") %>% 
+  specify(sleep_total ~ vore) %>% 
+  hypothesise(null = "independence") %>% 
+  generate(reps = 5000, type = "permute") %>% 
+  calculate(stat = "diff in means", order = c("omni", "herbi"))
+```
+```{r}
+#calculate the observed stat
+observed_stat <- msleep %>% 
+  filter(vore == "omni" | vore == "herbi") %>% 
+  specify(sleep_total ~ vore) %>% 
+  calculate(stat = "diff in means", order = c("omni", "herbi"))
+
+observed_stat
+```
+
+```{r}
+#visualise the observed stat on the null distribution and shade to the right since we're interested in positive differences between omnivores and herbivores
+null_distribution %>% 
+  visualise() +
+  shade_p_value(obs_stat = observed_stat, direction = "right")
+```
+
+We can tell this is non-significant from looking at the distribution, but we should get the p-value anyway.
+
+```{r}
+#get the p value
+p_value <- null_distribution %>% 
+  get_p_value(obs_stat = observed_stat, direction = "right")
+
+p_value
+```
+
+The test returned a p-value of 0.14, which is more than the alpha value of 0.05 specified previously. Therefore, we can't reject the null hypothesis in this instance as there is not evidence that omnivores sleep significantly more hours on average than herbivores. 
+
+
+## Q4 - Question 4. Perform an appropriate statistical test to determine whether the proportion of domesticated animal types in the population of animal types is greater than 5%
+
+
+```{r}
+#check NAs to decide whether or not to impute
+msleep %>% 
+  filter(is.na(conservation))
+```
+NAs should be imputed as FALSE in the is_domesticated column as it's clear that these are not domesticated animals (although there is perhaps an argument that humans are domesticated). 
+
+```{r}
+#create column to show whether an animial is domesticated
+msleep_domesticated <- msleep %>% 
+  mutate(is_domesticated = case_when(
+                            conservation == "domesticated" ~ TRUE, 
+                            is.na(conservation) ~ FALSE, 
+                            TRUE ~ FALSE), .after = conservation)
+```
+
+H0 - The proportion of domesticated animals is <= 5%
+H1 - The proportion of domesticated animals is  > 5%
+
+Alpha level - 0.05 (95% CI)
+
+```{r}
+#Check the proportion
+msleep_domesticated %>% 
+  group_by(is_domesticated) %>% 
+  summarise(prop = n()/nrow(msleep_domesticated)) %>% 
+  filter(is_domesticated == TRUE)
+```
+The proportion is 0.12 or 12% - this looks to be quite a bit more than 5%, so it looks like there may be evidence for the alternative hypothesis
+
+```{r}
+#generate the null distribution
+null_distribution <- msleep_domesticated %>% 
+  specify(response = is_domesticated, success = "TRUE") %>% 
+  hypothesise(null = "point", p = 0.05) %>% 
+  generate(reps = 5000, type = "draw") %>% 
+  calculate(stat = "prop")
+```
+
+```{r}
+#calculate observed stat
+observed_stat <- msleep_domesticated %>% 
+  specify(response = is_domesticated, success = "TRUE") %>% 
+  calculate(stat = "prop")
+
+observed_stat
+```
+
+```{r}
+#Plot observed stat on null distribution
+null_distribution %>% 
+  visualise(bins = 15) +
+  shade_p_value(obs_stat = observed_stat, direction = "right")
+```
+
+```{r}
+#get p value
+p_value <- null_distribution %>% 
+  get_p_value(obs_stat = observed_stat, direction = "right")
+
+p_value
+```
+
+The test returned a p value of 0.01, which is less than the alpha value of 0.05. This means that we can reject the null hypothesis in this case as there is evidence that the proportion of domesticated animals is greater than 5%.
+
+# 1.2 Hypothesis testing - Defining the Hypothesis
+
+For the following three business problems write out:
+
+    -What kind of test you would use
+    -H0 and H1 in both mathematical notation and in words.
+    -Also state the method you would use to generate the null distribution (bootstrap, permutation or         draw).
+
+## Q1 - You work for a independent coffee shop. The boss tells you that she thinks that around 40% of people in the town (population 30,000) know of the coffee shop, but you are skeptical of the estimate. You conduct a random survey of 200 people in the town, asking if respondents are aware of your coffee shop. You want to use the sample to test the hypothesis that 40% or more of the town’s population have heard of the coffee shop.
+
+Type of test  
+- I would use a one-sample hypothesis test of proportions here because we have one sample of people from the town and are trying to test the proportion of people who know about the coffee shop against the proportion the boss thinks knows about the coffee shop.
+
+Hypotheses:
+
+    -H0 - The proportion of people who know about the coffee shop is less than 0.40 or 40%
+    
+        - proportion of people who know about the coffee shop < 40%
+        
+    -H1 - The proportion of people who know about the coffee shop is 0.40 or 40% or more
+    
+        -proportion of people who know about the coffee shop >= 40%
+
+Method to generate the null distribution
+    -Draw - b/c the answer on the survey would be a yes/no, so we want to generate the null                    distribution by drawing these at random centred around a proportion of 0.40, then test the           actual observed proportion (from survey responses) against this.
+
+## Q2 - You work for a website design company and have performed an A/B test on the position of a banner on a website promoting a particular item.
+
+You selected five days at random last month and then randomly selected 200 of each sampled day’s users into group A and another 200 of that day’s users into group B. Group A continued to be shown the banner at the right hand side of the webpage (its usual position) while group B was shown the banner at the top of the page. You monitored each sampled user’s interactions with the website, in particular the ‘click through rate’ (CTR) on the banner, i.e. what proportion of sampled users clicked on the banner. You want to use the sampled data to test the hypothesis that website users overall are more likely to click on the banner if positioned at the top of the page
+
+
+Type of test - Here I would use a two sample test for independent groups - the two groups (A and B) are independent because they were assigned to two different groups when they viewed the web page and each group saw a different banner position, but (presumably) otherwise the same website. Therefore, the experiment is on independent groups - a control group and an experimental group.
+
+Hypotheses:
+
+    -H0 - The proportion of people in group B who clicked on the banner is less than or equal to the            proportion of people in group A who clicked on the banner
+    
+        - CTR(group B) <= CTR(group A)
+        
+    -H1 - The proportion of people in group B who clicked on the banner is greater than the            proportion of people in group A who clicked on the banner
+    
+        -CTR(group B) > CTR(group A)
+
+Method to generate the null distribution
+Here we need to use "permute" to generate the null distribution. Although we're still dealing with a proportion, because we have two groups, we need to use permute to shuffle the explanatory variables (in this case whether the participant was in the control or experimental group) as if there was no significant difference for the two groups, whether they clicked on the banner or not wouldn't be related to which group they were in. It's worth saying that we're only interested in a one tail test here or whether Group B clicked on the banner at a higher rate than group A, so although it's possible that group A would click the banner at a higher rate than group B, that doesn't really matter to us because that result wouldn't trigger any action since group A are just viewing the banner where it already is.
+
+## Q3 - You work as an analyst for a car manufacturing company - they have specific standards they must meet for standards and regulation purposes. You have been asked to check the quality control of the manufacture of a particular car part. You have been given data on a sample of 200 parts produced over the period of a week (the sampled parts were pulled at random from the production line and measured: the factory produced a lot more than 200 parts that week). The specification of the part stipulates a width of 145mm, and the manufacturing process is said to have ‘drifted’ if the mean width of parts differs significantly from 145mm. You want to use the sampled measurements to test whether the process overall has drifted.
+
+Type of test - We want to do a one sample test of the difference in means here. This is because we want to know whether the mean of the car part of interest for the week of interest differs significantly from the defined specification of 145mm. 
+
+Hypotheses:
+
+    -H0 - The mean for the sample week does not differ significantly from 145mm
+    
+        - mean(sample_week$car_part) = 145mm
+        
+    -H1 - The mean for the sample week is significantly different from 145mm
+    
+        -mean(sample_week$car_part) != 145mm
+
+Method to generate the null distribution - here we want to use bootstrapping because we're working with a continuous variable (width) and wanting to generate random samples (with a mean width of 145) that we can use to plot a null distribution of means. We can then use that null distribution to test whether or not the mean width of the car part from the sample week is significantly different from 145mm.
+
+# 1.3 Hypothesis testing - Interpreting the results.
+
+## Q1 - Coffee shop problem. Significance level: 0.05, calculated p-value: 0.07
+
+The test result showed a non-significant p value of 0.07, which did not meet our defined alpha level of 0.05. This means that there is not sufficient evidence that the proportion of people who know about the coffee shop in the town is 40% or more. It may be worth investing in some kind of advertising for the coffee shop, particularly in areas of the town where very few of the people surveyed knew about the coffee shop (if this information was collected as part of the survey). 
+
+## Q2 - Website company problem. Significance level: 0.01, p-value: 0.006
+
+The test result showed a significant p value of 0.006, which was less than our defined alpha level of 0.01. This means that there is evidence that the proportion of people who clicked on the banner when it is at the top of the page (i.e. those participants in group B) is higher than the proportion of people who clicked on the banner when it was placed in its current position (group A). I would suggest moving the banner to the top of the page since there is evidence that this may generate a higher click through rate.
+
+## Q3 - Manufacturing company problem. Significance level: 0.05, p-value: 0.55
+
+The test result showed a non-significant p value of 0.55, which was higher than our defined alpha level of 0.05. This means that there is not sufficient evidence that the mean width of the car part of interest was significantly different from the target width of 145mm during the sample week. There is not evidence at this time that the overall manufacturing process has drifted and no action needs to be taken.
