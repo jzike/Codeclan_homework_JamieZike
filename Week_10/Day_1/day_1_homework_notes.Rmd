@@ -1,0 +1,84 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+# Libraries
+
+```{r}
+library(tidyverse)
+library(janitor)
+library(modelr)
+library(infer)
+library(ggfortify)
+```
+
+# MVP
+
+## 1) Load the data into a dataframe project
+
+```{r}
+project <- read_csv("data/project_management.csv") %>% clean_names()
+```
+
+## 2) Plot the data, taking estimated_length as the independent variable and actual_length as the dependent variable.
+
+```{r}
+project %>% 
+  ggplot(aes(x = estimated_length,
+             y = actual_length)) +
+  geom_point()
+```
+
+## 3) Calculate the correlation coefficient of estimated_length and actual_length and interpret the value you obtain.
+
+The correlation coefficient is 0.80, which is very close to 1 (which would be the highest r value possible), so there is a very strong relationship between estimated_length and actual length. The two variables are positively correlated, meaning that as the estimated length of days it takes to complete a building job go up, so do the actual days it takes to complete the job, which is what we would want to see for an estimate of building time, because it implies that we're estimating longer times for jobs that do actually take longer.
+
+```{r}
+project %>% 
+  summarise(cor(estimated_length, actual_length))
+```
+
+## 4) Perform a simple linear regression using actual_length as the dependent variable, and estimated_length as the independent variable. Save the model object to a variable.
+
+```{r}
+model <- lm(formula = actual_length ~ estimated_length,
+            data = project)
+model
+```
+
+```{r}
+project <- project %>% 
+  add_predictions(model) %>% 
+  add_residuals(model)
+project
+```
+
+```{r}
+project %>% 
+  ggplot(aes(x = estimated_length)) +
+  geom_point(aes(y = actual_length)) +
+  geom_line(aes(y = pred), col = "red")
+```
+
+## 5) Interpret the regression coefficient of estimated_length (i.e. slope, gradient) you obtain from the model. How do you interpret the r2 value reported by the model?
+
+The slope is is 1.22, meaning that on average, for every increase of 1.22 days in estimated length, we would expect for actual length of the job to increase by 1 day.
+
+r2 is 0.65, meaning that 65% of the variation in the actual length of the job is predictable from the estimated length of the job. The line fits the data reasonably well, but there might be other variables outside of our model that could help explain more of the variation in the actual length of building jobs.
+
+
+```{r}
+summary(model)
+```
+
+
+## 6) Is the relationship statistically significant? Remember, to assess this you need to check the p-value of the regression coefficient (or slope/gradient). But you should first check the regression diagnostic plots to see if the p-value will be reliable (don’t worry about any outlier points you see in the diagnostic plots, we’ll return to them in the extension).
+
+The slope value is statistically significant, but the intercept value is not. The first three diagnostic plots below look alright
+
+```{r}
+autoplot(model)
+```
+
