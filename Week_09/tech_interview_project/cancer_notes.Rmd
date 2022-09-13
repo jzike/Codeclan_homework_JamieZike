@@ -1,0 +1,249 @@
+---
+output: 
+  html_document:
+  code_folding: hide
+---
+# Libraries
+
+```{r}
+library(tidyverse)
+```
+
+# Data
+
+```{r}
+annual_cancer <- read_csv("annual_cancer_data.csv") %>% janitor::clean_names()
+hb_label <- read_csv("hb_label.csv") %>% janitor::clean_names()
+scotland_annual_cancer <- read_csv("scotland_annual_cancer.csv") %>% 
+  janitor::clean_names()
+```
+
+# Cleaning/wrangling
+```{r}
+#only need hb code and name for join
+hb_label <- hb_label %>% 
+  select(hb, hb_name)
+```
+
+```{r}
+#join to get hb names
+annual_cancer <- annual_cancer %>% 
+  left_join(hb_label, by = "hb")
+```
+
+# Pre-analysis considerations and assumptions
+
+## 1) What is going to be the best metric for understanding cancer incidences?
+
+After researching each metric, I decided to use age-adjusted rates (specifically the European age standardised rates) for any comparisons because I read that these are best for comparing across different populations (e.g. different health boards, with all of Scotland) or within the same population over time when age distribution might differ.
+
+I also used standardized incidence ratios because they estimate "the occurance of cancer in a population relative to what might be expected if the population had the same cancer experience as some larger comparison population designated as "normal" or average". This could give insight into whether certain cancers occured more or less in the Borders than might be expected or whether incidences of cancer in a given year were higher or lower than might be expected.
+
+## 2) Assumptions about the dataset
+
+That information was comparable across datasets - I used both the Scotland-wide dataset and the health boards cancer incidence dataset. I assumed that the metrics were calculated in the same way.
+
+That the comparison population for the standardised incidence ratios was the wider Scottish population. This made sense because the all Scotland dataset didn't contain the standardised incidence ratio as a variable, but the health board dataset did.
+
+
+# Analysis questions
+
+In order to help inform the planning for provision of cancer treatment services in NHS Borders, we would like to gain better understanding of the incidence of cancer in NHS Borders.
+
+In order to better understand the incidence of cancer in NHS Borders, I asked the following questions: <br>
+1) What are the most prevalent cancers in the Borders in the last 5 years and how does this compare to all of Scotland? <br>
+2) What cancers are occuring more than expected in the last 5 years in the Borders? <br>
+3) What is happening to the age-adjusted rate of all cancers over time? Does this differ by sex? <br>
+4) What is happening to the standardised incidence ratio over time? Does this differ by sex? <br>
+
+
+## 1) What are the most prevalent cancers in the Borders in the last 5 years and how does this compare to all of Scotland?
+
+The most prevalent cancers in the Borders in the last 5 years were: <br>
+1) Non-melanoma skin cancer <br>
+2) Basal cell carcinoma (skin) <br>
+3) Squamous cell carcinoma (skin) <br>
+4) Trachea, bronchus and lung <br>
+5) Colorectal cancer <br>
+6) Breast cancer <br>
+
+The most prevalent cancers across Scotland in the last 5 years were: <br>
+1) Non-melanoma skin cancer <br>
+2) Basal cell carcinoma (skin) <br>
+3) Trachea, bronchus and lung <br>
+4) Breast cancer <br>
+5) Squamous cell carcinoma (skin) <br>
+6) Colorectal cancer <br>
+
+We can see here that the types of cancer that are the most prevalent over the past 5 years are the same in the Borders as across all of Scotland. It could be worth raising awareness especially of skin cancers since they are highly prevalent, but less routinely checked for than cancers like breast cancer (yearly mammograms after 50) and colorectal cancer (yearly bowel screening tests after 50). 
+
+```{r}
+#get grouped dataset for Borders that shows the 5 cancers with the highest easr for each year since 2015
+annual_cancer %>% 
+  filter(hb_name =="NHS Borders",
+         cancer_site != "All cancer types",
+         sex == "All",
+         year >= 2015) %>% 
+  group_by(year) %>% 
+  slice_max(easr, n = 5) %>% 
+  mutate(position = rank(-easr)) %>% 
+  #plot using grouped columns for each year
+  ggplot(aes(y = easr,
+             x = year,
+             fill = reorder(cancer_site, -easr),
+             group = position
+             )) +
+    geom_col(position = "dodge")+
+  geom_text(aes(x = year,
+                y = easr,
+                label = round(easr)
+                ),
+            hjust = 0.5,
+            size = 3,
+            position = position_dodge(width = 1))+
+  coord_flip()+
+  labs(x = "Year",
+      y = "European age standardised rate",
+      title = "Most prevalent cancers in NHS Borders by EASR 2015 - 2020",
+      fill = "Type of cancer")
+
+#get grouped dataset for all of Scotland that shows the 5 cancers with the highest easr for each year since 2015
+scotland_annual_cancer %>% 
+  filter(cancer_site != "All cancer types",
+         sex == "All",
+         year >= 2015) %>% 
+  group_by(year) %>% 
+  slice_max(easr, n = 5) %>% 
+  mutate(position = rank(-easr)) %>% 
+    #plot using grouped columns for each year
+  ggplot(aes(y = easr,
+             x = year,
+             fill = reorder(cancer_site, -easr),
+             group = position
+             )) +
+    geom_col(position = "dodge")+
+   geom_text(aes(x = year,
+                y = easr,
+                label = round(easr)
+                ),
+            hjust = 0.5,
+            size = 3,
+            position = position_dodge(width = 1))+
+  coord_flip()+
+  labs(x = "Year",
+      y = "European age standardised rate",
+      title = "Most prevalent cancers in Scotland by EASR 2015 - 2020",
+      fill = "Type of cancer")
+```
+
+## 2) What cancers are occuring more than expected in the last 5 years in the Borders? 
+
+For this, we need to know which cancers have a standardised incidence ratio over 100 in the past 5 years. A standardised incidence ratio over 100 indicates that more cancer cases occurred than expected. However, we also need to look at the confidence interval to interpret the standardised incidence ratio properly. If the incidence ratio is over 100 and confidence interval range does not include 100, we can say that the incidences in the Borders were significantly higher than the comparison population (all of Scotland). 
+
+In the Borders, over the past 5 years, the incidence of the following cancers was significantly higher than the incidence in Scotland overall: <br>
+1) Thyroid cancer (2015, 2016) <br>
+2) Chronic lymphocytic leukaemia (2019) <br>
+3) Chronic myeloid leukaemia (2018) <br>
+4) Multiple myeloma and malignant plasma cell neoplasms (2015, 2018) <br>
+5) Non-Hodgkin lymphoma (2017) <br>
+
+However, because there were relatively few incidences recorded of these cancers, a lot of these estimates are not very stable statistics and this can be seen from the very wide confidence intervals on the cancers where very few incidences were recorded, especially in comparison to cancers where more cases were recorded. For example, only 6 incidences of chronic myeloid leukaemia (the least number of incidences and the widest confidence interval) were recorded while 39 incidences of non-Hodgkin lymphoma were recorded (the highest number of incidences and the narrowest confidence interval). 
+
+Since no cancers are repeatedly showing up year after year as having significantly higher incidences than expected, there aren't really any here that warrant further inspection.
+```{r}
+#Get a grouped dataset that shows all cancers where the SIR is over 100 and the lower CI is over 100
+annual_cancer %>% 
+  select(hb_name,
+         year,
+         incidences_all_ages,
+         cancer_site,
+         sex,
+         standardised_incidence_ratio,
+         sir_lower95pc_confidence_interval,
+         sir_upper95pc_confidence_interval) %>% 
+  filter(hb_name =="NHS Borders",
+         cancer_site != "All cancer types",
+         standardised_incidence_ratio > 100,
+         sir_lower95pc_confidence_interval > 100,
+         year >= 2015,
+         sex == "All") %>% 
+  group_by(year) %>% 
+  #plot on a grouped column chart by year with confidence intervals to show which stats are more stable than others
+  ggplot(aes(y = standardised_incidence_ratio,
+             x = year,
+             fill = reorder(cancer_site, -standardised_incidence_ratio)
+             )) +
+    geom_col(position = "dodge")+
+  geom_errorbar(aes(ymin = sir_lower95pc_confidence_interval,
+                    ymax = sir_upper95pc_confidence_interval),
+                width = 0.4,
+                position = position_dodge(0.9)) +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5))+
+  labs(x = "Year",
+       y = "Standardised incidence ratio",
+       fill = "Type of cancer",
+       title = "Cancers occuring at higher than expected rates in NHS Borders 2015 - 2020")
+```
+
+
+
+
+
+
+
+## 3) What is happening to the age-adjusted rate of all cancers over time? Does this differ by sex?
+
+From the faceted graph below, we can see that the age-adjusted rate of cancer incidences was generally fairly steady until 2017 and started to drop dramatically. This could be worth investigating because even though we don't necessarily want incidences of cancer to go up, the lowering incidences of cancer could mean that fewer people are catching their cancer early.
+
+
+The extreme low in 2020 reflected the general government advice that people should not see a doctor unless it was absolutely necessary. This could mean that fewer people are coming in even if they feel something is off. This is especially important because the cancers with the highest incidences were skin cancers and people might see skin changes as "not an emergency" and put off going to the doctor. 
+
+We can see that female age-adjusted rates of cancer are less than male rates; however, this could be due to a sex imbalance in the Borders since the easr doesn't adjust for sex ratio. It shouldn't be taken at face value and should instead be investigated further. We can see that the male cancer rate has dropped sharply, particularly in 2019 and 2020, which is reflective of the overall population in the Borders 
+```{r}
+annual_cancer %>% 
+  filter(cancer_site == "All cancer types",
+         hb_name == "NHS Borders") %>% 
+  ggplot(aes(x = year,
+             y = easr))+
+  geom_point() +
+  geom_line(group = 1)+
+  facet_wrap(~sex) +
+  labs(x = "Year",
+       y = "European age standardised rate",
+       title = "Age-adjusted rate of all cancers in NHS Borders 2015 - 2020",
+       subtitle = "Including rates by biological sex")
+```
+
+
+## 4) What is happening to the standardised incidence ratio over time? Does this differ by sex?
+
+The graph below shows that for the Borders in general, there are more years where the standard incidence ratio indicates that the number of cancer cases is significantly lower than expected (confidence intervals are only shown for years where there was a statistically significant difference). 
+
+```{r}
+annual_cancer %>% 
+  filter(cancer_site == "All cancer types",
+         hb_name == "NHS Borders") %>% 
+  ggplot(aes(x = year,
+             y = standardised_incidence_ratio))+
+  geom_point() +
+  geom_line(group = 1)+
+  #the data argument below specifies that CIs should only be applied to years where the SIR is statistically significant
+  geom_errorbar(data = annual_cancer %>% 
+                  filter(cancer_site == "All cancer types",
+                         hb_name == "NHS Borders",
+                         (standardised_incidence_ratio > 100 & 
+                            sir_lower95pc_confidence_interval > 100)|
+                           (standardised_incidence_ratio < 100 & 
+                              sir_upper95pc_confidence_interval < 100)),
+                aes(y = standardised_incidence_ratio,
+                    ymin = sir_lower95pc_confidence_interval,
+                    ymax = sir_upper95pc_confidence_interval),
+                width = 0.4)+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5))+
+  facet_wrap(~sex)+
+  labs(x = "Year",
+       y = "Standardised incidence ratio",
+       title = "Standardised incidence ratio (SIR) of all cancers in NHS Borders 2015 - 2020",
+       subtitle = "Including SIR by biological sex")
+```
+
