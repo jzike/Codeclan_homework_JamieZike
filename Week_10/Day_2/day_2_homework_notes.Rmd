@@ -1,0 +1,166 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+# Libraries
+
+```{r}
+library(tidyverse)
+library(GGally)
+library(ggfortify)
+library(fastDummies)
+```
+
+# 1) Load the housing_prices.csv data set and undertake an initial exploration of the data. 
+
+```{r}
+housing_prices <- read_csv("data/housing_prices.csv")
+```
+
+```{r}
+housing_prices %>% head()
+housing_prices %>% summary()
+```
+
+# 2) We expect the total_rooms of houses to be strongly correlated with total_bedrooms. Use ggpairs() to investigate correlations between these two variables.
+
+```{r}
+ggpairs(housing_prices, columns = 4:5)
+```
+
+The correlation between the two variables is very strong at 0.934.
+
+# 3) So, we do find significant correlations. Let’s drop total_bedrooms from the dataset, and use only total_rooms going forward.
+
+```{r}
+housing_prices <- housing_prices %>% 
+  select(-total_bedrooms)
+```
+
+# 4) We are interested in developing a regression model for the median_house_value of a house in terms of the possible predictor variables in the dataset.
+
+## 4.1) Use ggpairs() to investigate correlations between median_house_value and the predictors (this may take a while to run, don’t worry, make coffee or something).
+
+```{r}
+ggpairs(housing_prices)
+```
+
+## 4.2) Perform further ggplot visualisations of any significant correlations you find.
+
+```{r}
+#latitude and median house value
+housing_prices %>% 
+  ggplot(aes(x = latitude,
+             y = median_house_value)) +
+  geom_point()+
+  geom_smooth(method = "lm", se = FALSE)
+
+```
+
+```{r}
+#longitude and median house value
+housing_prices %>% 
+  ggplot(aes(x = longitude,
+             y = median_house_value)) +
+  geom_point()+
+  geom_smooth(method = "lm", se = FALSE)
+```
+
+```{r}
+#housing_median_age and median house value
+housing_prices %>% 
+  ggplot(aes(x = housing_median_age,
+             y = median_house_value)) +
+  geom_point()+
+  geom_smooth(method = "lm", se = FALSE)
+```
+
+```{r}
+#total rooms and median house value
+housing_prices %>% 
+  ggplot(aes(x = total_rooms,
+             y = median_house_value)) +
+  geom_point()+
+  scale_x_sqrt()+
+  geom_smooth(method = "lm", se = FALSE)
+```
+
+```{r}
+#households and median house value
+housing_prices %>% 
+  ggplot(aes(x = households,
+             y = median_house_value)) +
+  geom_point()+
+  scale_x_sqrt() +
+  geom_smooth(method = "lm", se = FALSE)
+```
+
+```{r}
+#median_income and median house value
+housing_prices %>% 
+  ggplot(aes(x = median_income,
+             y = median_house_value)) +
+  geom_point()+
+  geom_smooth(method = "lm", se = FALSE)
+```
+
+# 5) Shortly we may try a regression model to fit the categorical predictor ocean_proximity. Investigate the level of ocean_proximity predictors. How many dummy variables do you expect to get from it?
+
+I expect to get 4 dummy variables (n - 1)
+
+```{r}
+housing_prices %>% 
+  group_by(ocean_proximity) %>% 
+  summarise(number = n())
+```
+
+# 6) Start with simple linear regression. Regress median_house_value on median_income and check the regression diagnostics.
+
+```{r}
+model_income_value <- lm(median_house_value ~ median_income, housing_prices)
+
+autoplot(model_income_value)
+
+summary(model_income_value)
+```
+# 7) Add another predictor of your choice. Check your assumptions, diagnostics, and interpret the model.
+
+```{r}
+#add dummies for ocean_proximity and clean them up
+housing_dummies <- housing_prices %>% 
+  fastDummies::dummy_cols(
+    select_columns = "ocean_proximity",
+    remove_first_dummy = TRUE,
+    remove_selected_columns = TRUE
+  ) %>% janitor::clean_names() %>% 
+  mutate(across(ocean_proximity_inland : ocean_proximity_near_ocean, as.logical))
+```
+
+```{r}
+#visualise near_bay on box plot and look at correlation
+housing_dummies %>% 
+  ggplot(aes(ocean_proximity_near_bay, median_house_value))+
+  geom_boxplot()
+
+housing_dummies %>% 
+  summarise(cor = cor(ocean_proximity_near_bay, median_house_value))
+```
+
+```{r}
+#model using multiple linear regression
+model_income_bay <- lm(median_house_value ~ 
+                         median_income + ocean_proximity_near_bay,
+                       housing_dummies)
+
+#check diagnostics
+autoplot(model_income_bay)# remember to ask about this, looks like there is a downward trend in the first plot.
+
+summary(model_income_bay)
+```
+
+For every 10K increase in median income, we can expect to see median house value increase by $39,611.70 on average (holding all other variables constant).
+
+If the house block is located near the bay, we can expect the median house value to increase by $40,158.20 on average (holding all other variables constant)
+
+R^2 is 0.429, so 42.9% of the variation in median_house_value is explained by proximity to a bay and median income.
