@@ -76,7 +76,8 @@ summary(model)
 
 ## 6) Is the relationship statistically significant? Remember, to assess this you need to check the p-value of the regression coefficient (or slope/gradient). But you should first check the regression diagnostic plots to see if the p-value will be reliable (don’t worry about any outlier points you see in the diagnostic plots, we’ll return to them in the extension).
 
-The slope value is statistically significant, but the intercept value is not. The first three diagnostic plots below look alright
+The slope value is statistically significant, but the intercept value is not. The first three diagnostic plots below look alright, although there is a slight downward trend happening in the first plot, but this is not 
+
 
 ```{r}
 autoplot(model)
