@@ -1,0 +1,239 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+# Libraries
+```{r}
+library(tidyverse)
+library(modelr)
+library(GGally)
+library(ggfortify)
+```
+
+# Data
+
+```{r}
+house_prices <- read_csv("data/kc_house_data.csv") %>% janitor::clean_names()
+```
+
+# Task
+We want you to build an explanatory model for the price of housing in King County, i.e. an interpretable model in which the included variables are statistically justifiable.
+
+## 1. Tidy up the data ready for regression:
+
+```{r}
+house_prices %>% head()
+house_prices %>% skimr::skim()
+```
+
+### Observations
+- The data is about the sale of individual houses over one year.
+- We can probably drop id, date, sqft_living15, sqft_lot15, zipcode
+- waterfront should be a logical variable
+- convert renovated into logical
+- view, condition, and grade should be ordered factors
+
+```{r}
+house_tidy <- house_prices %>% 
+  mutate(waterfront = as.logical(waterfront),
+         ever_renovated = if_else(yr_renovated == 0,
+                                FALSE, TRUE),
+         across(c(view, condition, grade), ~factor(.x, ordered = TRUE))) %>% 
+  select(-c(id, date, sqft_living15, sqft_lot15, zipcode, yr_renovated))
+```
+
+
+## 2) Check for aliased variables using the alias() function (this takes in a formula object and a data set).
+
+```{r}
+alias(price ~ ., house_tidy)
+
+#sqft_basement is an aliased variable, remove
+house_tidy <- house_tidy %>% 
+  select(-sqft_basement)
+```
+
+## 3) Systematically build a regression model containing up to four main effects (remember, a main effect is just a single predictor with coefficient), testing the regression diagnostics as you go
+
+```{r}
+house_numeric <- house_tidy %>% 
+  select_if(is.numeric)
+
+house_nonnumeric <- house_tidy %>% 
+  select_if(function(x) !is.numeric(x))
+
+house_nonnumeric$price <- house_tidy$price
+
+ggpairs(house_numeric, progress = FALSE)
+```
+
+### Notes on numerics
+- We should consider logs for price, sqft_living and sqft_above b/c they are highly positively skewed.
+- sqft_living and sqft_above are the strongest correlations, we should try them first.
+
+```{r}
+house_numeric <- house_numeric %>% 
+  mutate(
+    ln_price = log(price),
+    ln_sqft_living = log(sqft_living),
+    ln_sqft_above = log(sqft_above)
+  )
+
+house_tidy <- house_tidy %>% 
+  mutate(
+    ln_price = log(price),
+    ln_sqft_living = log(sqft_living),
+    ln_sqft_above = log(sqft_above)
+  )
+```
+
+```{r}
+house_numeric %>% 
+  select(-c(pric))
+ggpairs(house_numeric, progress = FALSE)
+```
+
+### Notes on log() numerics
+The correlation is less strong when using the log() variables, so perhaps we should use the originals and see how the model does
+
+```{r}
+ggpairs(house_nonnumeric, progress = FALSE)
+```
+
+```{r}
+house_nonnumeric %>% 
+  count(grade)
+```
+
+```{r}
+house_nonnumeric %>% 
+  ggplot(aes(x = grade,
+             y = price))+
+  geom_boxplot()
+```
+### Notes on nonnumeric
+- There looks like there might be a difference by grade, particularly as we get to the builds that are graded as high quality (11-13)
+- Waterfront also looks like there might be a difference in price based on whether or not the house is on the waterfront
+
+### First predictor
+
+```{r}
+#sqft_living has highest correlation, so trying a model with that first.
+mod1a <- lm(ln_price ~ ln_sqft_living, house_tidy)
+
+autoplot(mod1a) 
+
+summary(mod1a)
+```
+
+#### Notes
+- I tried using non-log values, but the QQ plot was highly skewed, and the residuals vs fitted showed that the model became much more wrong as living sqft increases, so I tried log() values and the diagnostics were much better. I've chosen to use them in the model instead because even though the correlations are higher with non-log values, it isn't by much and the diagnostics indicate we can't trust them as much.
+
+```{r}
+mod1b <- lm(ln_price ~ ln_sqft_above, house_tidy)
+
+autoplot(mod1b) 
+
+summary(mod1b)
+```
+
+### Check variables against "residue
+
+```{r warning=FALSE}
+house_resid <- house_tidy %>% 
+  add_residuals(mod1a) %>% 
+  select(-c(price, ln_price, sqft_living, ln_sqft_living,
+            view, condition, ever_renovated, sqft_lot, yr_built))
+
+house_resid %>% 
+  select(resid, everything()) %>% 
+  ggpairs(aes(colour = waterfront, alpha = 0.5), progress = FALSE, bins = 30)
+```
+
+#### Notes on residue
+- Waterfront and latitude look interesting. 
+- King County includes Seattle, so makes sense that as latitude goes up, house price increases since those houses would be closer to Seattle. There could be an interesting interaction between lat and long?
+
+### Second predictor
+
+```{r}
+mod2a <- lm(ln_price ~ ln_sqft_living + lat,
+            data = house_tidy)
+
+summary(mod2a)
+
+autoplot(mod2a)
+```
+
+```{r}
+mod2b <- lm(ln_price ~ ln_sqft_living + waterfront,
+            data = house_tidy)
+
+summary(mod2b)
+
+autoplot(mod2b)
+```
+
+### Check residue
+
+```{r}
+house_resid_numeric <- house_tidy %>% 
+  add_residuals(mod2a) %>% 
+  select(-c(price, ln_price, sqft_living, ln_sqft_living, lat,
+            view, condition, ever_renovated, sqft_lot, grade, waterfront))
+
+house_resid_numeric %>% 
+  select(resid, everything()) %>% 
+  ggpairs(progress = FALSE)
+
+house_resid_nonnumeric <- house_tidy %>% 
+  add_residuals(mod2a) %>% 
+  select(-c(price, ln_price, sqft_living, ln_sqft_living, lat, long, ln_sqft_above,
+            bedrooms, bathrooms, sqft_lot, floors, sqft_above, yr_built))
+
+house_resid_nonnumeric %>% 
+  select(resid, everything()) %>% 
+  ggpairs(aes(colour = waterfront),progress = FALSE)
+```
+
+#### Notes on residue
+- Grade and waterfront look interesting
+- None of the numeric ones seem to be adding much.
+
+
+### Third predictor
+
+```{r}
+#first trying adding in waterfront
+mod3a <- lm(ln_price ~ ln_sqft_living + lat + waterfront,
+            data = house_tidy)
+
+summary(mod3a)
+
+autoplot(mod3a)
+```
+
+
+Improved, but let's see if grade will be better
+
+
+
+
+```{r}
+#trying adding in grade
+mod3b <- lm(ln_price ~ ln_sqft_living + lat + grade,
+            data = house_tidy)
+
+summary(mod3b)
+
+autoplot(mod3b)
+```
+This one explains more of the variance in price, so it would be good to keep it in if it is significant on the ANOVA
+
+
+```{r}
+anova(mod2a, mod3b)
+```
+
+Looks like we can keep grade in the model despite some of the levels being non-significant.
