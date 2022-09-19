@@ -43,6 +43,14 @@ house_tidy <- house_prices %>%
   select(-c(id, date, sqft_living15, sqft_lot15, zipcode, yr_renovated))
 ```
 
+```{r}
+house_tidy %>% 
+  ggplot(aes(x = price))+
+  geom_histogram() +
+  scale_x_continuous(trans = "log2")
+```
+
+
 
 ## 2) Check for aliased variables using the alias() function (this takes in a formula object and a data set).
 
