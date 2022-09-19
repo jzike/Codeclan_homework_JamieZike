@@ -1,0 +1,47 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+# Homework quiz
+
+
+
+
+## 1) I want to predict how well 6 year-olds are going to do in their final school exams. Using the following variables am I likely under-fitting, fitting well or over-fitting? Postcode, gender, reading level, score in maths test, date of birth, family income.
+
+### I would say fitting well because all of these variables could potentially be predictive of 6 year olds final school exams according to existing theory
+
+- Postcode - can give some indication of SIMD which is linked to attainment gap and exam scores<br>
+- Gender - commonly used to look at gender gap, especially in certain subjects<br>
+- Reading level - there is evidence that the attainment gap increases with age, so reading level could be worth including<br>
+- Score in maths test - as above. <br>
+- Date of birth - children who are young for their year in school (e.g. born just before the cutoff for enrolling in primary school) might not be as "school ready" as older children (e.g. good self-regulation skills). In America, these are commonly children with August bdays. Also children who start off "behind" often don't catch up. <br>
+- Family income - well established link between family income and test results. Although possibly some crossover with the info that Postcode could give us. <br>
+
+## 2) If I have two models, one with an AIC score of 34,902 and the other with an AIC score of 33,559 which model should I use?
+
+### The model with 33,559 because a lower AIC score is better when comparing models.
+
+## 3) I have two models, the first with: r-squared: 0.44, adjusted r-squared: 0.43. The second with: r-squared: 0.47, adjusted r-squared: 0.41. Which one should I use?
+
+### The first one with adjusted r-squared 0.43 - the second one has a larger r-squared value, but is likely being downgraded in adjusted r-squared because it's overfitted.
+
+## 4) I have a model with the following errors: RMSE error on test set: 10.3, RMSE error on training data: 10.4. Do you think this model is over-fitting?
+
+### No, there's not much of a difference in these RMSE values between the test and training sets. This means the model is performing similarly when used on new data.
+
+## 5) How does k-fold validation work?
+
+K-fold validation shuffles the dataset randomly and separates the dataset into k different groups or folds of approximately equal size (generally 10). Each group has the chance to be used as the test data set while the others are used as training datasets. It fits a model on the training dataset and evaluates on the test set. This is repeated for each fold. At the end, the model evaluation scores (e.g. r-squared, BIC) are summarised.
+
+## 6) What is a validation set? When do you need one?
+
+A validation set is sometimes used in addition to a test set (e.g. splitting 60/20/20 along train/test/validate). This is useful when you're going to do some additional work on the model when applying it to the test set (e.g. tweaking the hyperparameters) and need to then test the completed model on a new (validation) set.
+
+## 7) Describe how backwards selection works.
+
+### Start off will all variables included in the model and take them out one at a time based on the least amount of reduction in R^2. This goes on until all predictors have been removed.
+
+## 8) Describe how best subset selection works
+
+### For each size of model (e.g. 1 predictor, 2 predictors), exhaustively test every possible combination of variables to see which produces the best model (in terms of highest R^2)

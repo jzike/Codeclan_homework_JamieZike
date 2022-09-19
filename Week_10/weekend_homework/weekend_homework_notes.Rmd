@@ -1,0 +1,506 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+# Libraries 
+
+```{r}
+library(tidyverse)
+library(modelr)
+library(ggfortify)
+library(GGally)
+library(lubridate)
+```
+
+# Task brief
+
+We’ve looked at a few different ways in which we can build models this week, including how to prepare them properly. This weekend we’ll build a multiple linear regression model on a dataset which will need some preparation. The data can be found in the data folder, along with a data dictionary
+
+We want to investigate the avocado dataset, and, in particular, to model the AveragePrice of the avocados. Use the tools we’ve worked with this week in order to prepare your dataset and find appropriate predictors. Once you’ve built your model use the validation techniques discussed on Wednesday to evaluate it. Feel free to focus either on building an explanatory or a predictive model, or both if you are feeling energetic!
+
+As part of the MVP we want you not to just run the code but also have a go at interpreting the results and write your thinking in comments in your script.
+
+# Data exploration
+
+```{r}
+avocados <- read_csv("data/avocado.csv") %>% janitor::clean_names()
+```
+
+```{r}
+head(avocados)
+```
+
+## notes on PLU codes:
+PLU codes are used to identify bulk produce and indicate information that could be related to price - e.g. conventionally grown avocados vs organically grown ones (organic tends to be more expensive).  Other information included in these codes is: commodity, variety, growing methodology (e.g., organic), and the size.
+
+```{r}
+skimr::skim(avocados)
+
+
+```
+
+## Notes on dataset and potential new variables and cleaning steps
+- The timespan of the data is more than 3 years, so it's reasonable to think that the price will have increased. We might also expect the month to be useful to predicting price since avocados might be cheaper when they are in season (and there are more available). We should extract month from date since year is already recorded in the dataset and then drop date. We can then transform months into seasons to reduce the number of categories since 12 is a lot.
+
+-We might want to make the PLU codes proportions of the total volume - this would potentially be more helpful than the number of each PLU code since the regions are very different sizes (e.g. one is the entirety of the US)
+
+-We might want to make the bags proportions of total bags for the same reason as above.
+
+-Let's change type to a logical variable indicating whether or not the avocados were organic and then drop type
+
+
+## Notes on region 
+
+- these are an assortment of regions, total US and major metropolitan areas
+
+```{r}
+avocados %>% count(region)
+```
+
+
+Other than the ones below, the rest of the values in "region" are names of major metropolitan areas
+WestTexNewMexico
+West
+TotalUS
+Southeast
+SouthCentral
+SouthCarolina
+Plains
+NorthernNewEngland
+Northeast
+Midsouth
+GreatLakes
+
+### Investigate region to see if it's worth keeping in.
+
+Based on the boxplots below, there do seem to be some differences between different regions (e.g. northeast and south central); however, creating a major metropolitan areas group doesn't seem to be a good way of amalgamating the rest of the data since there are so many outliers. It would potentially be an idea to add these cities to their respective regions (e.g. "Portland" to "West"); however, this would mean a lot of hard coding to keep this variable. <br>
+
+Additionally, the dataset uses some regions that are difficult to discern the difference between (e.g. midsouth and southcentral). Some additional searching showed that there isn't a consensus on how to divide the US into regions and the factor analysis that I found used county data to investigate socioeconomic differences in regions. Although this breakdown might be very useful to the analysis, we just don't have that level of detail in this dataset. So, my decision is to drop region
+
+```{r}
+avocados %>% 
+  mutate(region = if_else(region %in% c("WestTexNewMexico",
+                                        "West",
+                                        "TotalUS",
+                                        "Southeast",
+                                        "SouthCentral",
+                                        "SouthCarolina",
+                                        "Plains",
+                                        "NorthernNewEngland",
+                                        "Northeast",
+                                        "Midsouth",
+                                        "GreatLakes"), region,
+                                        "Major metropolitan area")) %>% 
+  ggplot(aes(x = region,
+         y = average_price)) +
+  geom_boxplot(outlier.color = "red")
+```
+
+## Clean up variables and check for aliases
+
+```{r}
+avocados_tidy <- avocados %>% 
+  #clean up variables as described in notes above
+  mutate(prop_4046 = x4046/total_volume,
+         prop_4225 = x4225/total_volume,
+         prop_4770 = x4770/total_volume,
+         prop_small_bag = small_bags/total_bags,
+         prop_large_bag = large_bags/total_bags,
+         prop_xl_bag = x_large_bags/total_bags,
+         month = lubridate::month(date, label = TRUE),
+         season = case_when(
+           month %in% c("Jan", "Feb", "Dec") ~ "Winter",
+           month %in% c("Mar", "Apr", "May") ~ "Spring",
+           month %in% c("Jun", "Jul", "Aug") ~ "Summer",
+           TRUE ~ "Fall"
+         ),
+         is_organic = type == "organic") %>% 
+  #we don't need the bag or PLU data now that we've replaced with proportions and we no longer need type or date
+  select(-c(x1, date, region, x4046, x4225, x4770, small_bags, large_bags, 
+            x_large_bags, type, month))
+```
+
+```{r}
+#checking for aliased variables
+alias(average_price ~ ., avocados_tidy)
+```
+No aliased variables in the set.
+
+
+# Create test/train sets
+
+Using 80/20 proportion to split dataset into train/test
+
+```{r}
+n_data <- nrow(avocados_tidy)
+test_index <- sample(1:n_data, size = n_data * 0.2)
+
+test_avocados <- slice(avocados_tidy, test_index)
+train_avocadoes <- slice(avocados_tidy, -test_index)
+```
+
+
+# Look at train dataset
+```{r}
+train_avocadoes %>% skimr::skim()
+```
+There's only a few NAs, so we can probably impute them with the median.
+
+```{r}
+train_avocadoes <- train_avocadoes %>% 
+  mutate(across(prop_small_bag:prop_xl_bag,
+                ~coalesce(.x, median(.x, na.rm = TRUE))))
+```
+
+
+
+#Look at ggpairs
+```{r warning=FALSE}
+ggpairs(train_avocadoes, progress = FALSE)
+```
+
+prop_4046 and is_organic are both looking like the most promising predictors at this point.
+
+# First predictor
+
+```{r}
+#Changed to log of price after looking at the autoplot
+mod_1a <- lm(log(average_price) ~ is_organic, train_avocadoes)
+
+autoplot(mod_1a)
+
+summary(mod_1a)
+
+bptest(mod_1a)
+
+```
+## Interpretation of mod_1a
+
+Residuals vs fitted looks okay (although it's difficult to tell because is_organic is a binary variable), the QQ plot looks non-normal, scale location has a slight downward trend, but nothing too awful. However, there are only two fitted values here (because it's a binary variable), so it's quite difficult to tell anything from this plot as well.
+
+- R^2 is 0.38, so overall, whether or not an avocado is organic can explain 38% of the variance in average price. 
+- If an avocado is organic, on average, we can expect to see an average log price about $0.35 higher when compared with non-organic avocados. This is around a 42% increase in average price for organic avocados vs non-organic.
+```{r}
+#equation to find the percent increase(or decrease) in response for every one unit increase in independent variable
+(exp(0.35) - 1) * 100
+```
+- The p-value was significant at the 0.1% level, meaning that we can reject the null hypothesis that there is no significant difference between organic and non-organic avocados. We would only see this extreme of a difference in price by chance around 0.1% of the time.
+
+
+
+```{r}
+mod_1b <- lm(log(average_price) ~ prop_4046, train_avocadoes)
+
+autoplot(mod_1b)
+
+summary(mod_1b)
+```
+
+Whether or not an avocado is organic is the best predictor - which makes sense in a real context as well since we would generally expect organic produce to be more expensive than conventional produce.
+
+## Check residue from mod_1a
+
+```{r}
+avocado_resid <- train_avocadoes %>% 
+  add_residuals(mod_1a) %>% 
+  select(-average_price)
+
+avocado_resid %>% 
+  ggpairs(aes(colour = is_organic, alpha = 0.5), progress = FALSE)
+```
+
+## Notes
+Prop 4225 has the highest correlation with the residuals, but there also looks like there could be differences by season.
+
+# Second predictor
+
+Let's try prop 4225 and season.
+
+```{r}
+mod_2a <- lm(log(average_price) ~ is_organic + prop_4225, 
+             data = train_avocadoes)
+
+autoplot(mod_2a)
+
+summary(mod_2a)
+
+bptest(mod_2a)
+```
+## Interpretation of mod_2a
+The autoplots don't look too terrible, but it's difficult to tell because there's a big gap in the scale-location plot and the residuals vs fitted plot. This is surely because of the is_organic variable. It does look like there is some sort of pattern in the scale-location plot now and the bp test was significant, indicating that we haven't satisfied the assumption of homoskedasticity. <br>
+
+Looking at the summary:<br>
+-We've seen an increase in R^2 to 0.43, meaning that this model can explain about 43% of the variation in average price.<br>
+-Our new predictor, prop_4225, is significant at the 0.01% level, meaning that we can reject the null hypothesis that there is no relationship between average price and proportion of avocados with PLU 4225 when controlling for whether or not an avocado is organic. <br>
+-For each 1 unit increase in the proportion of avocados with PLU 4225, on average we can expect to see a $0.37 increase in the log of average price when controlling for whether or not the avocado is organic. That is around a 32% increase in average price for each one unit increase in proportion of avocados with PLU 4225. <br>
+
+
+```{r}
+#equation to find the percent increase(or decrease) in response for every one unit increase in independent variable
+(exp(0.28) - 1) * 100
+```
+What does this mean? <br>
+It would be good if we knew what the difference was between the different PLU codes, but the PLU description says that this could indicate differences in variety and size, so perhaps avocados with PLU 4225 are bigger or of a more attractive variety than the other PLU codes. This is just a guess, we can't know for sure unless we had data about the qualitative differences between avocados with different PLU codes.
+
+
+
+```{r}
+mod_2b <- lm(log(average_price) ~ is_organic + season, 
+             data = train_avocadoes)
+
+autoplot(mod_2b)
+
+summary(mod_2b)
+
+bptest(mod_2b)
+```
+
+Prop 4225 performs better in the model than season
+
+## Check the residue from mod_2a
+
+```{r}
+avocado_resid <- train_avocadoes %>% 
+  add_residuals(mod_2a) %>% 
+  select(-average_price, -is_organic, -prop_4225)
+
+avocado_resid %>% 
+  ggpairs(progress = FALSE)
+```
+
+## Notes
+Prop_large_bag is looking like the strongest correlation now, although it still looks like there is a slight difference in season
+
+# Third predictor
+
+```{r}
+mod_3a <- lm(log(average_price) ~ is_organic + prop_4225 + prop_large_bag, 
+             data = train_avocadoes)
+
+autoplot(mod_3a)
+
+summary(mod_3a)
+
+bptest(mod_3a)
+```
+
+```{r}
+mod_3b <- lm(log(average_price) ~ is_organic + prop_4225 + season, 
+             data = train_avocadoes)
+
+autoplot(mod_3b)
+
+summary(mod_3b)
+
+bptest(mod_3b)
+```
+
+Mod_3b is better
+
+## Interpretation of mod_3b
+The autoplots don't look too terrible, but we can see some pattern in the scale location plot in the form of a slight downward trend. The bp test was significant, indicating that we haven't satisfied the assumption of homoskedasticity. <br>
+
+- We can see that the model has improved and can now explain 48% of the variance in the average price of avocados. <br>
+- We can see that all the dummy variables for season are significant at the 0.01% level, indicating that we can reject the null hypothesis that there is no relationship between the log of average price and the season when holding all other variables constant. <br>
+- When all other variables are held constant, we can expect to see a $0.16 reduction in the log average price of avocados in winter when compared with fall. This is around a 17% decrease in average price in winter when compared with fall.
+
+
+```{r}
+#equation to find the percent increase(or decrease) in response for every one unit increase in independent variable
+(exp(0.16) - 1) * 100
+```
+What does this mean?
+- It's a little unclear why we would predict lower prices for avocados in the winter when compared with fall. To be fair, these prices are not that much lower, even though there is a statistically significant difference. When checking online, it seems like since Mexican avocados started to be imported into the US, there's not really a set season for avocados since they grow all year round in Mexico. Does this potentially mean that we're getting to the end of the variables that make sense in predicting average price of avocados?
+
+## Check the residue from mod_3b
+
+```{r}
+avocado_resid <- train_avocadoes %>% 
+  add_residuals(mod_3b) %>% 
+  select(-average_price, -is_organic, -prop_4225, -season)
+
+avocado_resid %>% 
+  ggpairs(progress = FALSE)
+```
+## Notes
+-The most promising predictor here is prop_large_bag, although year also looks promising.
+
+# Fourth predictor
+
+```{r}
+#model with prop_large_bag
+mod_4a <- lm(log(average_price) ~ is_organic + prop_4225 + season + prop_large_bag, 
+             data = train_avocadoes)
+
+autoplot(mod_4a)
+
+summary(mod_4a)
+
+bptest(mod_4a)
+```
+## Interpretation of mod_4a
+
+-We are continuing to see a downward trend in the the scale location plot and it looks a bit worse here than the last model. The bp test was significant, indicating that we haven't satisfied the assumption of homoskedasticity. <br>
+
+- We can see that R^2 has increased and adjusted R^2 hasn't penalised us too much for the addition of a new variable. The model including the proportion of large bags sold can now explain 52% of the variance in the log average price of an avocado.
+- The p value for prop_large bag is significant at the 0.01% level, meaning that we can reject the null hypothesis that there is no relationship between log average price and the proportion of large bags sold.
+- The coefficient for prop_large_bag is -0.21, meaning that for each one unit increase in the proportion of large bags of avocados sold, we can expect to see, on average, a reduction of $0.20 in the log average price of a single avocado. This is about a 23% reduction in average price.
+```{r}
+#equation to find the percent increase(or decrease) in response for every one unit increase in independent variable
+(exp(0.21) - 1) * 100
+```
+- What does this mean - this makes sense from a real world perspective because when you buy a larger bag, the unit price of the produce or product sold in the bag is usually less because you are buying in bulk. Therefore, we would expect that as the proportion of large bags sold increases, the unit price would decrease.
+
+```{r}
+mod_4b <- lm(log(average_price) ~ is_organic + prop_4225 + season + year, 
+             data = train_avocadoes)
+
+autoplot(mod_4b)
+
+summary(mod_4b)
+
+bptest(mod_4b)
+```
+Prop large bag is a better model.
+
+
+## Check residue from mod_4a
+
+```{r}
+avocado_resid <- train_avocadoes %>% 
+  add_residuals(mod_4a) %>% 
+  select(-average_price, -is_organic, -prop_4225, -season, - prop_large_bag)
+
+avocado_resid %>% 
+  ggpairs(progress = FALSE)
+```
+## Notes
+It looks like it might be useful to add year as a fifth predictor because its correlation with the residuals is comparatively high, while all the others have reduced significantly.
+
+# Fifth predictor
+
+```{r}
+#model with year
+mod_5a <- lm(log(average_price) ~ is_organic + prop_4225 + season + 
+               prop_large_bag + year, 
+             data = train_avocadoes)
+
+autoplot(mod_5a)
+
+summary(mod_5a)
+
+bptest(mod_5a)
+```
+## Interpretation of mod_5a
+
+-We are continuing to see a downward trend in the the scale location plot and it looks a bit worse here than the last model again. The bp test was also significant, indicating that we haven't satisfied the assumption of homoskedasticity. <br>
+
+- We can see that the R^2 value has increased and the adjusted R^2 hasn't penalised us too much for adding another variable to the model. The model can now explain around 56% of the variance in log average price We should also try comparing the BIC of the last two models.
+-The p value for year is significant at the 0.01% level, meaning that we can reject the null hypothesis that there is no relationship between the log average price of an avocado and the year.
+- The coefficient for year is 0.061, meaning that for each 1 year increase, we can expect to see, on average, a $0.06 increase in the log average price of a single avocado. This is around a 6% increase in average price.
+```{r}
+#equation to find the percent increase(or decrease) in response for every one unit increase in independent variable
+(exp(0.06) - 1) * 100
+```
+- What does this mean? - This makes sense using real world logic, as generally we would expect the cost of produce to increase over time. 
+
+## Compare BIC for mod_4a and mod_5a
+
+```{r}
+BIC(mod_4a)
+BIC(mod_5a)
+```
+
+
+# Try automated modelling using leaps
+
+```{r}
+library(leaps)
+```
+
+
+
+```{r}
+#try exhaustive modelling
+regsubsets_exhaustive <- regsubsets(log(average_price) ~ ., 
+                                 data = train_avocadoes,
+                                 nvmax = 8,#max number of variables
+                                 method = "exhaustive") 
+
+sum_regsubsets_exhaustive <- summary(regsubsets_exhaustive)
+
+sum_regsubsets_exhaustive$which
+
+plot(regsubsets_exhaustive, 
+     scale = "adjr2")
+
+plot(sum_regsubsets_exhaustive$rsq,
+     type = "o,
+     pch = 20")
+plot(sum_regsubsets_exhaustive$bic,
+     type = "o,
+     pch = 20")
+```
+
+## Notes - 
+We can see a jump in R^2 value on model 6 (which has year, prop_4225, prop_large_bag, is organic, seasonSpring and seasonWinter in it), which also corresponds to a decrease in BIC on model 6. We know that we need to add all the seasons to the model (not just one) and this happens up until model 7(where summer is added), which includes year, prop_4225, prop_large_bag, is_organic and all the dummy seasons variables.  <br>
+
+We can also see from the R^2 and BIC plots that this increases R^2 and decreases BIC, which is good because we want to have a larger R^2 and a lower BIC when comparing models. As suggested by cross-validated, the absolute value of AIC/BIC doesn't matter, it is the comparison between AIC/BIC between models that matters for model selection, so as BIC has continued to decrease for model 7, it is a better model. This was also evident in the manual stepwise regression as the p value was significant for all levels of season <br>
+
+It would seem that we should include season, even though it doesn't seem to make a lot of real world sense that season would have any predictive value for average price because avocados are grown all year round. Perhaps there is another explanation that would explain why season is linked to avocado price if we dug a bit more <br>
+
+This is essentially the same as the model I built in the manual stepwise regression process above, although the variables were added in a different order in the automated exhaustive model.
+
+
+
+# Test on the test set.
+
+First we need to impute the test set in the same way we imputed the train set
+
+```{r}
+test_avocados <- test_avocados %>% 
+  mutate(across(prop_small_bag:prop_xl_bag,
+                ~coalesce(.x, median(.x, na.rm = TRUE))))
+```
+
+
+```{r}
+predictions_test <- test_avocados %>% 
+  #adding in log of avg price since this is what we used in the model
+  mutate(ln_avg_price = log(average_price)) %>% 
+  add_predictions(mod_5a) %>% 
+  select(ln_avg_price, pred)
+
+mse_test <- mean((predictions_test$pred - predictions_test$ln_avg_price)^2)
+sqrt(mse_test)
+
+predictions_train <- train_avocadoes %>% 
+  #adding in log of avg price since this is what we used in the model, but we did the log manually every time
+  mutate(ln_avg_price = log(average_price)) %>% 
+  add_predictions(mod_5a) %>% 
+  select(ln_avg_price, pred)
+
+mse_train <- mean((predictions_train$pred - predictions_train$ln_avg_price)^2)
+sqrt(mse_train)
+```
+```{r}
+#Converting logged RMSE back to normal values
+10^0.191
+10^0.193
+```
+## Interpretation and final judgment of model
+
+The RMSE for both the test and train datasets are pretty similar, although I wouldn't have expected the RMSE for the test data to be smaller than the RMSE for the train data. However, even the best model that we could make for log average price could only predict around 56% of the variance in log average price. Perhaps we are missing some crucial data that would help to make a better model. <br>
+
+A search on RMSE indicates that this is useful in estimating the standard deviation or a typical observed value from the model's prediction, meaning that typically our predictions are off by around $1.55. <br>
+
+observed value = predicted value + predictably distributed random noise with mean zero <br>
+
+RMSE indicates the "random noise" or anything that our model doesn't capture. Considering that the model could only predict around 56% of the variance of the log of average price, there is probably a lot that our model doesn't capture. Since our average prices are for a single avocado (where the mean average observed price is $1.40), a RMSE of 1.55 is actually quite large, meaning that the model is failing to account for important features underlying the data. We could be missing crucial data that could help to fit a more accurate model. Coming back to the autoplots of the residuals, all of the models had indications of heteroskedasticity, which could be caused by the omission of variables that were important to the model 
+
+```{r}
+avocados_tidy %>% 
+  summarise(mean_avg_price = mean(average_price))
+```
+My recommendation would be not to use this model to predict the log of avg price of avocados because this analysis indicates that it isn't very accurate and is missing important variables. I would recommend gathering more data on other variables that could help to predict average price. For example, better data on regions that is linked to qualitative differences in socio-economic status between regions could perhaps be a useful variable to add to the model.
