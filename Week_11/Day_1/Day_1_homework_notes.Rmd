@@ -1,0 +1,148 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+# Libraries
+
+```{r}
+library(tidyverse)
+library(modelr)
+library(readxl)
+library(pROC)
+library(janitor)
+```
+
+# Data
+
+```{r}
+telco_churn <- read_excel("data/telecomms_churn.xlsx") %>% janitor::clean_names()
+```
+
+## Data cleaning
+
+```{r}
+telco_clean <- telco_churn %>%
+  filter(!is.na(total_charges)) %>% 
+  select(-customer_id) %>% 
+  mutate(across(where(is_character), as_factor)) %>%
+  mutate(senior_citizen = as_factor(if_else(senior_citizen == 1, "Yes", "No"))) %>% 
+  mutate(churn = churn == "Yes")
+```
+
+# 1) Let’s perform logistic regression using the churn column as the binary dependent variable. Create three separate single predictor logistic regression models choosing from amongst the promising predictor columns found in the analysis above (look at the pairs plots). Try to have at least one continuous predictor, and at least one categorical predictor. Check that the coefficient of the single predictor in each model is statistically significant.
+
+```{r}
+head(telco_clean)
+```
+
+## Let's try monthly_charges, tenure, partner
+
+```{r}
+#model with partner
+mod_partner <- glm(churn ~ partner,
+                   data = telco_clean,
+                   family = binomial(link = "logit"))
+
+mod_partner_pred <- telco_clean %>% 
+  add_predictions(model = mod_partner, type = "response") %>% 
+  mutate(pred_churn = pred >= 0.30)
+
+summary(mod_partner)
+```
+
+```{r}
+#model with tenure
+mod_tenure <- glm(churn ~ tenure,
+                   data = telco_clean,
+                   family = binomial("logit"))
+
+mod_tenure_pred <- telco_clean %>% 
+  add_predictions(model = mod_tenure, type = "response") %>% 
+  mutate(pred_churn = pred >= 0.30)
+
+summary(mod_tenure)
+
+```
+
+```{r}
+#model with monthly_charges
+mod_monthly_charges <- glm(churn ~ monthly_charges,
+                   data = telco_clean,
+                   family = binomial("logit"))
+
+mod_monthly_charges_pred <- telco_clean %>% 
+  add_predictions(model = mod_monthly_charges, type = "response") %>% 
+  mutate(pred_churn = pred >= 0.30)
+
+summary(mod_monthly_charges)
+
+```
+
+
+
+# 2) Plot ROC curves for each classifier (it would be nice to put these on the same axes). Obtain AUC values for each of your classifiers and say which of them is likely to be the best classifier.
+
+```{r}
+#assign roc objects for models
+roc_obj_partner <- mod_partner_pred %>% 
+  roc(response = churn, predictor = pred)
+
+roc_obj_tenure <- mod_tenure_pred %>% 
+  roc(response = churn, predictor = pred)
+
+roc_obj_monthly_charges <- mod_monthly_charges_pred %>% 
+  roc(response = churn, predictor = pred)
+
+#plot ROC for all models on same axis
+ggroc(data = list(partner = roc_obj_partner,
+                  tenure = roc_obj_tenure,
+                  monthly_charges = roc_obj_monthly_charges),
+      legacy.axes = TRUE)+
+  labs(x = "False Positive Rate", y = "True Positive Rate")
+```
+
+```{r}
+auc(roc_obj_monthly_charges)
+auc(roc_obj_partner)
+auc(roc_obj_tenure)
+```
+The model with tenure as a predictor has the best (highest) AUC value, so this is likely the best classifier.
+
+```{r}
+#check the confusion table
+mod_tenure_pred %>% 
+  tabyl(churn, pred_churn) %>% 
+  adorn_title()
+```
+Wow, lots of false positives!
+
+
+# 3) Take the model generating the best classifier (highest AUC value) from amongst your three and interpret the fitted coefficient of the particular predictor in that model in a meaningful way. Think in terms of odds ratio, i.e. how does changing the predictor value affect the odds that a customer will churn?
+
+We can see from the model and from the plot that tenure has a negative relationship with churn, meaning that as a customer's tenure increases, they are less likely to churn. 
+
+```{r}
+summary(mod_tenure)
+
+ggplot(telco_clean) +
+  geom_jitter(aes(x = tenure,
+                  y = as.numeric(churn)),
+              alpha = 0.5, height = 0.1, width = 0.1) +
+  geom_line(data = mod_tenure_pred,
+            aes(x = tenure,
+                y = pred), col = "red")+
+  labs(y = "Estimated p(churn)")
+```
+When we compute the odds factor for a 12 month increase in tenure, we can see that this decreases the odds of churn by a factor of 0.63. 
+
+Or, for a 12 month decrease in tenure, we could expect the odds of churn to increase by a factor of 0.63.
+  
+```{r}
+#function to calculate the odds change where b1 is the fitted coefficient for the predictor in a logistic regression model and change is the change in the units of the predictor
+odds_change <- function(b1, change){
+  exp(b1 * change)
+}
+#so the coefficient for tenure was -0.039 and we're interested in a change of 12 months in tenure
+odds_change(-0.039010, 12)
+```
