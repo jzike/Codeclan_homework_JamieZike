@@ -1,0 +1,188 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+# Libraries and data
+
+```{r}
+library(rpart)
+library(rpart.plot)
+library(tidyverse)
+library(janitor)
+library(modelr)
+library(yardstick)
+```
+
+```{r}
+titanic_set <- read_csv('data/titanic_decision_tree_data.csv') %>% janitor::clean_names()
+
+shuffle_index <- sample(1:nrow(titanic_set))
+
+# shuffle the data so class order isn't in order - need this for training/testing split later on 
+titanic_set <- titanic_set[shuffle_index, ]
+```
+
+# MVP
+
+## 1) Cleaning up the data. Do the following:
+
+Take only observations which have a survived flag (i.e. that aren’t missing)
+Turn your important variables into factors (sex, survived, pclass, embarkation)
+Create an age_status variable which groups individuals under (and including) 16 years of age into a category called “child” category and those over 16 into a category called “adult”.
+Drop the NA
+Drop any variables you don’t need (X1, passenger_id, name, ticket, far, cabin)
+
+```{r}
+titanic_set <- titanic_set %>% 
+  filter(!is.na(survived)) %>% 
+  mutate(across(c(sex, survived, pclass, embarked), as.factor)) %>% 
+  mutate(age_status = if_else(age <= 16, "child", "adult"), .after = age) %>% 
+  select(-c(x1, passenger_id, name, ticket, fare, cabin)) %>% 
+  na.omit()
+```
+
+## 2) Have a look at your data and create some plots to ensure you know what you’re working with before you begin. Write a summary of what you have found in your plots. Which variables do you think might be useful to predict whether or not people are going to die?
+
+```{r}
+titanic_set %>% 
+  count(sex, survived)
+
+titanic_set %>% 
+  tabyl(sex, survived) %>% 
+  adorn_percentages()
+```
+Clearly more female passengers than male survived.
+
+
+```{r}
+titanic_set %>% 
+  tabyl(pclass, survived) %>% 
+  adorn_percentages()
+```
+3rd class died at the highest rate, first class at the lowest
+
+```{r}
+titanic_set %>% 
+  tabyl(embarked, survived) %>% 
+  adorn_percentages()
+```
+
+People who boarded in Queenstown had a 70/30 split of died/survived, 
+Cherbourg 39/61, Southhampton 64/36. People who boarded in Cherbourg look like they have the highest chance of surviving
+
+```{r}
+titanic_set %>% 
+  tabyl(age_status, survived) %>% 
+  adorn_percentages()
+```
+Would have expected children to survive at a much higher rate than this tbh. Only 55% of children survived, while 45% died. This still looks better than adults - 38% survived and 62% died.
+
+
+I think that sex and passenger class will be the most important based on the above, so many we can try to see them together. I predict that probably high class (e.g. 1st/2nd class) female passengers will probably be most likely to survive
+
+```{r}
+titanic_set %>% 
+  tabyl(sex, pclass, survived) 
+
+```
+As expected - only 3 female passengers in first class died and only 6 in second class. When compared to male passengers, this is vastly different. I think this is going to be important to the model.
+
+
+## 3) Now you can start to build your model. Create your testing and training set using an appropriate split. Check you have balanced sets. Write down why you chose the split you did and produce output tables to show whether or not it is balanced. 
+
+```{r}
+#make test and train sets
+n_data <- nrow(titanic_set)
+
+test_index <- sample(1:n_data, size = n_data * 0.10)
+
+titanic_test <- slice(titanic_set, test_index)
+titanic_train <- slice(titanic_set, -test_index)
+```
+
+I chose a 90/10 train/test split b/c we don't have that much data and we want to train the model on as much data as possible.
+
+```{r}
+#check that sets are balanced
+
+titanic_test %>% 
+  tabyl(survived)
+
+titanic_train %>% 
+  tabyl(survived)
+```
+They are fairly balanced.
+
+## 4) Create your decision tree to try and predict survival probability using an appropriate method, and create a decision tree plot.
+
+```{r}
+
+titanic_train <- titanic_train %>% 
+  mutate(survived = factor(survived, levels = c(0, 1), labels = c("No", "Yes")))
+#create the decision tree
+
+titanic_fit <- rpart(
+  formula = survived ~ .,
+  data = titanic_train,
+  method = "class"
+)
+```
+
+```{r}
+rpart.plot(titanic_fit,
+           yesno = 2,
+           fallen.leaves = TRUE,
+           faclen = 6,
+           digits = 4)
+```
+
+```{r}
+rpart.rules(titanic_fit, cover = TRUE)
+```
+
+
+## 5) Write down what this tells you, in detail. What variables are important? What does each node tell you? Who has the highest chance of surviving? Who has the lowest? Provide as much detail as you can.
+
+### 5.1) What variables are the most important?
+
+As I suspected, sex and class were the most important variables (closest to the root, the most dramatic splits), followed by age and point of embarcation.
+
+### 5.2) What does each node tell you?
+For some reason the nodes are displaying the probability for survived rather than died. I know this b/c the root node says "no" for survived, but is displaying the probability for survived.
+
+Each node displays the majority class for that node, the probability(survived) and the percentage of data
+
+### 5.3) The highest probability of survival is: 0.94 when a female passenger is in class 1/2 and is aged less than 38.5 years and embarked in either Cherbourg or Queenstown
+
+The lowest probability for survival is: 0.10 when a female passenger is in class 3 and is aged 38.5 or above.
+
+## 6) Test and add your predictions to your data. Create a confusion matrix. Write down in detail what this tells you for this specific dataset.
+
+```{r}
+titanic_test <- titanic_test %>% 
+  mutate(survived = factor(survived, levels = c(0, 1), labels = c("No", "Yes")))
+
+titanic_test_pred <- titanic_test %>% 
+  add_predictions(titanic_fit, type = "class")
+```
+
+```{r}
+conf_mat <- titanic_test_pred %>% 
+  conf_mat(truth = survived,
+           estimate = pred)
+```
+
+This tells us that the model is performing pretty well!
+
+We have 36 true deaths predicted and only 8 false survivals. That's a true negative rate of 82%
+```{r}
+36/(36 +8)
+```
+
+We have 19 true survivals predicted and 8 false deaths. That's a true positive rate of 70%
+
+```{r}
+19/(19 + 8)
+```
+
