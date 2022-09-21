@@ -2065,14 +2065,14 @@ can see that this decreases the odds of churn by a factor of 0.63.</p>
 churn to increase by a factor of 0.63.</p>
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
-<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuI2Z1bmN0aW9uIHRvIGNhbGN1bGF0ZSB0aGUgb2RkcyBjaGFuZ2Ugd2hlcmUgYjEgaXMgdGhlIGZpdHRlZCBjb2VmZmljaWVudCBmb3IgdGhlIHByZWRpY3RvciBpbiBhIGxvZ2lzdGljIHJlZ3Jlc3Npb24gbW9kZWwgYW5kIGNoYW5nZSBpcyB0aGUgY2hhbmdlIGluIHRoZSB1bml0cyBvZiB0aGUgcHJlZGljdG9yXG5vZGRzX2NoYW5nZSA8LSBmdW5jdGlvbihiMSwgY2hhbmdlKXtcbiAgZXhwKGIxICogY2hhbmdlKVxufVxuI3NvIHRoZSBjb2VmZmljaWVudCBmb3IgdGVudXJlIHdhcyAtMC4wMzkgYW5kIHdlJ3JlIGludGVyZXN0ZWQgaW4gYSBjaGFuZ2Ugb2YgMTIgbW9udGhzIGluIHRlbnVyZVxub2Rkc19jaGFuZ2UoLTAuMDM5MDEwLCAxMilcbmBgYCJ9 -->
-<pre class="r"><code>#function to calculate the odds change where b1 is the fitted coefficient for the predictor in a logistic regression model and change is the change in the units of the predictor
-odds_change &lt;- function(b1, change){
-  exp(b1 * change)
-}
-#so the coefficient for tenure was -0.039 and we&#39;re interested in a change of 12 months in tenure
-odds_change(-0.039010, 12)</code></pre>
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuI3NvIHRoZSBjb2VmZmljaWVudCBmb3IgdGVudXJlIHdhcyAtMC4wMzkgYW5kIHdlJ3JlIGludGVyZXN0ZWQgaW4gYSBjaGFuZ2Ugb2YgMTIgbW9udGhzIGluIHRlbnVyZVxub2Rkc19jaGFuZ2UoLTAuMDM5MDEwLCAxMilcblxuYGBgIn0= -->
+<pre class="r"><code>#so the coefficient for tenure was -0.039 and we&#39;re interested in a change of 12 months in tenure
+odds_change(-0.039010, 12)
+</code></pre>
 <!-- rnb-source-end -->
+<!-- rnb-output-begin eyJkYXRhIjoiWzFdIDAuNjI2MTc4NFxuIn0= -->
+<pre><code>[1] 0.6261784</code></pre>
+<!-- rnb-output-end -->
 <!-- rnb-chunk-end -->
 </div>
 
