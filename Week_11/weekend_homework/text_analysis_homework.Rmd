@@ -1,0 +1,191 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+# Libraries
+
+```{r}
+library(tidyverse)
+library(tidytext)
+library(janeaustenr)
+library(textdata)
+```
+
+# Data
+```{r}
+pride_book <- prideprejudice
+sense_book <- sensesensibility
+```
+
+# MVP
+
+## 1) Find the most common words in both Pride & Prejudice and Sense & Sensibility
+
+```{r}
+#convert to tibbles and put each word in its own row using unnest_tokens()
+pride_book <- tibble(
+  id = 1:length(pride_book),
+  text = pride_book
+) %>% 
+  unnest_tokens(words, text)
+
+sense_book <- tibble(
+  id = 1:length(sense_book),
+  text = sense_book
+) %>% 
+  unnest_tokens(words, text)
+```
+
+```{r}
+pride_book %>% 
+  count(words, sort = TRUE)
+
+sense_book %>% 
+  count(words, sort = TRUE)
+```
+Top 10 in Sense and Sensibility
+1) to
+2) the
+3) of
+4) and
+5) her
+6) a
+7) i
+8) in
+9) was
+10) it
+
+Top 10 in Pride and Prejudice
+1) the
+2) to
+3) of
+4) and
+5) her
+6) i
+7) a
+8) in
+9) was
+10) she
+
+
+Pretty much all stop words!
+
+## 2) Find the most common words in both Pride & Prejudice and Sense & Sensibility, not including stop words.
+
+```{r}
+pride_book %>% 
+  anti_join(stop_words, by = c("words" = "word")) %>% 
+  count(words, sort = TRUE)
+
+sense_book %>% 
+  anti_join(stop_words, by = c("words" = "word")) %>% 
+  count(words, sort = TRUE)
+```
+Top 10 in Sense and Sensibility w/o stop words
+1) Elinor
+2) Marianne
+3) Time
+4) Dashwood
+5) Sister
+6) Edward
+7) Mother
+8) Miss
+9) Jennings
+10) Willoughby
+
+
+Top 10 in Pride and Prejudice w/o stop words
+1) Elizabeth
+2) Darcy
+3) Bennet
+4) Miss
+5) Jane
+6) Bingley
+7) Time
+8) Lady
+9) Sister
+10) Wickham
+
+## 3) Find the most common sentiment words in both Pride & Prejudice and Sense & Sensibility.
+
+```{r}
+pride_book %>% 
+  anti_join(stop_words, by = c("words" = "word")) %>% 
+  inner_join(get_sentiments("bing"), by = c("words" = "word")) %>% 
+  filter(words != "miss") %>% #take out miss b/c its used v frequently as a title and will impact results
+  count(sentiment, words, sort = TRUE)
+
+sense_book %>% 
+  anti_join(stop_words, by = c("words" = "word")) %>% 
+  inner_join(get_sentiments("bing"), by = c("words" = "word")) %>% 
+  filter(words != "miss") %>% #take out miss b/c its used v frequently as a title and will impact results
+  count(sentiment, words, sort = TRUE)
+```
+Top sentiment words in Sense and Sensibility
+1) happy - positive
+2) affection - positive
+3) love - positive
+4) poor - negative
+5) pleasure - positive
+6) happiness - positive
+7) comfort - positive
+8) regard - positive
+9) doubt - negative
+10) glad - positive
+
+
+Top sentiment words in Pride and Prejudice
+1) love - positive
+2) pleasure - positive
+3) happy - positive
+4) happiness - positive
+5) affection - positive
+6) regard - positive
+7) object - negative 
+8) pride - positive (interesting cause this isn't considered a positive attribute in the book)
+9) perfectly - positive
+10) scarcely - negative
+
+# Extension
+## 1) Can you create a plot which visualises the differences between the books?
+
+```{r}
+pride_book <- pride_book %>% 
+  mutate(title = "pride and prejudice", .before = id)
+
+sense_book <- sense_book %>% 
+  mutate(title = "sense and sensibility", .before = id)
+
+#bind datasets to compare in plots
+books <- pride_book %>% 
+  bind_rows(sense_book)
+
+#get sentiment values from afinn
+book_sentiments <- books %>% 
+  inner_join(get_sentiments("afinn"), by = c("words" = "word"))
+```
+
+```{r}
+#plot with points
+book_sentiments %>% 
+  group_by(title, id) %>% 
+  summarise(mean_sentiment = mean(value)) %>% 
+ggplot(aes(x = id,
+           y = mean_sentiment,
+           colour = title)) +
+  geom_point(alpha = 0.2) +
+  geom_smooth()
+
+#plot w/o points to more closely show differences in sentiment btwn two books
+book_sentiments %>% 
+  group_by(title, id) %>% 
+  summarise(mean_sentiment = mean(value)) %>% 
+ggplot(aes(x = id,
+           y = mean_sentiment,
+           colour = title)) +
+  #geom_point(alpha = 0.2) +
+  geom_smooth()
+```
+
+When you look at the second one without the points, you can see that sense and sensibility looks to have lower lows than pride and prejudice as well as a positive "hump" in the middle. Without revealing any spoilers, I do think that this reflects the comparative narrative flow of the two books.

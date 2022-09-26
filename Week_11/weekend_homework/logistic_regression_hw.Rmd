@@ -1,0 +1,207 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+# Libraries
+
+```{r}
+library(tidyverse)
+library(modelr)
+library(glmulti)
+library(janitor)
+library(pROC)
+```
+
+# Data
+
+```{r}
+oj_purchases <- read_csv("data/orange_juice.csv") %>% janitor::clean_names()
+```
+
+# Data cleaning
+
+```{r}
+oj_purchases %>% head()
+
+oj_purchases %>% skimr::skim()
+```
+
+```{r}
+oj_purchases <- oj_purchases %>% 
+  mutate(purchase_mm = purchase == "MM", .after = purchase) %>% 
+  select(-purchase)
+```
+
+```{r}
+head(oj_purchases)
+```
+
+After looking at the dataset, it's clear that there are a lot of price related variables, only some of which are likely to be useful to the dataset:
+- price_ch/mm      -   price without discounts
+- disc_ch/mm       -   discount on oj in $
+- sale_price_ch/mm -   price that the oj was actually sold at (price minus any discounts)
+- pct_disc_ch/mm   -   discount on oj in %
+- list_price_diff  -   diff between price_mm and price_ch (diff between prices without any discounts)
+- price_diff       -   sale_price_mm - sale_price_ch
+
+*Sale price is composed on price_ch/mm and disc_ch/mm, so we can discard these variables in favour of sale price (actual price the oj was sold at)
+*Price difference is the difference between the sale price of mm and ch, so it contains information about them both in one variable. Personally I would choose this over the two separate sale price variables since people would generally consider the price difference as a factor if they don't have a clear preferance for a particular brand.
+*List price difference is the difference between prices without any discounts, which I don't think is very useful for determining whether a customer purchases something b/c surely they'd be more likely to look at the actual selling prices and not the price difference before any discounts
+*pct_disc - not sure if this is going to add anything to what would already be discernable by price difference. On the other hand, customers who slightly perfer a certain brand might choose to buy that one if there is a large percentage discount. I still think that this impact would be captured by price difference though.
+
+I'll just retain price difference.
+
+```{r}
+oj_purchases %>% 
+  select(-c(price_ch, price_mm, disc_ch, disc_mm, sale_price_ch, sale_price_mm,
+            pct_disc_ch, pct_disc_mm, list_price_diff, store7))
+```
+
+It's not 100% clear what week of purchase means b/c we don't have any reference dates here. I don't know if we should leave it in as a factor since it's going to lead to a lot of different coefficients; however, it is possible that Minute Maid or Citrus Hill may have done some kind of advertising on a particular week, which could have an impact on customer choices. I'm not sure that this justifies leaving it in though. I'm also unsure whether leaving it in as a numeric variable makes sense unless there's some outside variable that causes preferences to shift over time. The only thing I can really think of is that people might be more concerned with price differences as the cost of living rises, but that's more likely over years rather than weeks.
+
+I think I'm going to take it out b/c 52 levels is really too much for the small chance that a certain week might have some kind of advertising associated with it...
+
+We'll also remove store7 and store b/c store id amalgamates these two by giving each store an id (store 7 is labelled with a 0 in the store variable and store7 variable is just a yes/no variable about whether the sale was at store 7)
+
+```{r}
+tidy_oj_purchases <- oj_purchases %>% 
+  select(-c(price_ch, price_mm, disc_ch, disc_mm, sale_price_ch, sale_price_mm,
+            pct_disc_ch, pct_disc_mm, list_price_diff, store7, store, 
+            weekof_purchase)) %>% 
+  mutate(store_id = as.factor(store_id),
+         special_ch = as.factor(special_ch),
+         special_mm = as.factor(special_mm))
+```
+
+# split into test/train datasets
+
+```{r}
+n_data <- nrow(tidy_oj_purchases)
+
+test_index <- sample(1:n_data, size = n_data * 0.20)
+
+test_oj <- slice(tidy_oj_purchases, test_index)
+train_oj <- slice(tidy_oj_purchases, -test_index)
+```
+
+```{r}
+train_oj %>% 
+  janitor::tabyl(purchase_mm)
+test_oj %>% 
+  janitor::tabyl(purchase_mm)
+```
+
+# Use GLM to find the "best" model.
+
+```{r}
+glmulti_search_all_mains <- glmulti(
+  purchase_mm ~ .,
+  data = train_oj,
+  level = 1,
+  method = "h",
+  crit = "bic",
+  confsetsize = 10,
+  plotty = F,
+  report = T,
+  fitfunction = "glm",
+  family = binomial(link = "logit")
+)
+
+summary(glmulti_search_all_mains)
+```
+```{r}
+top <- weightable(glmulti_search_all_mains)
+```
+
+The best model is purchase_mm ~ loyal_ch + price_diff
+
+But let's see if there are any interactions we should consider.
+
+```{r}
+glmulti_search_interactions <- glmulti(
+  purchase_mm ~ loyal_ch + price_diff,
+  data = train_oj,
+  level = 2,
+  method = "h",
+  crit = "bic",
+  confsetsize = 10,
+  marginality = TRUE,
+  minsize = 3,
+  maxsize = 3,
+  plotty = F,
+  report = T,
+  fitfunction = "glm",
+  family = binomial(link = "logit")
+)
+
+summary(glmulti_search_interactions)
+weightable(glmulti_search_interactions)
+```
+This increases the BIC and we want the lowest BIC possible, so the interaction isn't adding anything to the model.
+
+So our final model is: purchase_mm ~ loyal_ch + price_diff
+
+## Add predictions to the train dataset
+
+```{r}
+#first we need to assign the best models to objects
+mod_oj <- 
+  glm(purchase_mm ~ loyal_ch + price_diff,
+      data = train_oj,
+      family = binomial(link = "logit"))
+
+mod_oj_interaction <- 
+  glm(purchase_mm ~ loyal_ch + price_diff + loyal_ch:price_diff,
+      data = train_oj,
+      family = binomial(link = "logit"))
+#add the predictions to the train dataset
+train_oj_pred <- train_oj %>% 
+  add_predictions(model = mod_oj, type = "response") %>% 
+  mutate(pred_mm = pred >= 0.50)
+
+train_oj_pred_interaction <- train_oj %>% 
+  add_predictions(model = mod_oj_interaction, type = "response") %>% 
+  mutate(pred_mm = pred >= 0.50)
+```
+
+```{r}
+#check the confusion table
+train_oj_pred %>% 
+  tabyl(purchase_mm, pred_mm) %>% 
+  adorn_title()
+
+train_oj_pred_interaction %>% 
+  tabyl(purchase_mm, pred_mm) %>% 
+  adorn_title()
+```
+The model with the interaction looks like it's performing worse.
+
+
+# Test on the test dataset
+
+## Add predictions
+
+```{r}
+test_oj_pred <- test_oj %>% 
+  add_predictions(model = mod_oj, type = "response") %>% 
+  mutate(pred_mm = pred >= 0.50)
+```
+
+```{r}
+#check the confusion table
+test_oj_pred %>% 
+  tabyl(purchase_mm, pred_mm) %>% 
+  adorn_title()
+```
+```{r}
+roc_obj_oj <- test_oj_pred %>% 
+  roc(response = purchase_mm, predictor = pred)
+
+ggroc(data = roc_obj_oj,
+      legacy.axes = TRUE)+
+  labs(x = "False Positive Rate", y = "True Positive Rate")
+```
+```{r}
+auc(roc_obj_oj)
+```
